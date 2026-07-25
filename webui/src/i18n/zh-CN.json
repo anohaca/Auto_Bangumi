@@ -103,6 +103,26 @@
     "update_failed": "更新失败!",
     "update_success": "更新成功!"
   },
+  "calendar": {
+    "description": "按照 ANI-RSS 元数据整理 AutoBangumi 中的番剧",
+    "empty": "还没有番剧数据",
+    "load_error": "番剧日历加载失败，请稍后重试",
+    "loading": "正在读取番剧星期信息...",
+    "pending": "待补充星期",
+    "refresh": "刷新",
+    "summary": "共 {total} 部，已分类 {resolved} 部，未确定 {unknown} 部",
+    "title": "番剧日历",
+    "unknown": "未确定星期",
+    "weekdays": {
+      "星期一": "星期一",
+      "星期二": "星期二",
+      "星期三": "星期三",
+      "星期四": "星期四",
+      "星期五": "星期五",
+      "星期六": "星期六",
+      "星期日": "星期日"
+    }
+  },
   "rss": {
     "delete": "删除",
     "disable": "禁用",

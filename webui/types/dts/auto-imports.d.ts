@@ -10,6 +10,7 @@ declare global {
   const apiCheck: typeof import('../../src/api/check')['apiCheck']
   const apiConfig: typeof import('../../src/api/config')['apiConfig']
   const apiDownload: typeof import('../../src/api/download')['apiDownload']
+  const apiIntegration: typeof import('../../src/api/integration')['apiIntegration']
   const apiLog: typeof import('../../src/api/log')['apiLog']
   const apiProgram: typeof import('../../src/api/program')['apiProgram']
   const apiRSS: typeof import('../../src/api/rss')['apiRSS']

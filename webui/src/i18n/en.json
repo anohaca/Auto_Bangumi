@@ -103,6 +103,26 @@
     "update_failed": "Update Failed!",
     "update_success": "Update Success!"
   },
+  "calendar": {
+    "description": "AutoBangumi shows grouped by ANI-RSS metadata",
+    "empty": "No anime data yet",
+    "load_error": "Failed to load the calendar. Please try again.",
+    "loading": "Loading weekday information...",
+    "pending": "Weekday pending",
+    "refresh": "Refresh",
+    "summary": "{total} shows, {resolved} grouped, {unknown} unknown",
+    "title": "Anime Calendar",
+    "unknown": "Unknown weekday",
+    "weekdays": {
+      "星期一": "Monday",
+      "星期二": "Tuesday",
+      "星期三": "Wednesday",
+      "星期四": "Thursday",
+      "星期五": "Friday",
+      "星期六": "Saturday",
+      "星期日": "Sunday"
+    }
+  },
   "rss": {
     "delete": "Delete",
     "disable": "Disable",

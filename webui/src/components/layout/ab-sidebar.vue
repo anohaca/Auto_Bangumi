@@ -45,7 +45,6 @@ const items = [
     icon: Calendar,
     label: () => t('sidebar.calendar'),
     path: '/calendar',
-    hidden: true,
   },
   {
     id: 3,
