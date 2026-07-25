@@ -531,7 +531,7 @@
       new Promise((_, reject) =>
         window.setTimeout(
           () => reject(new Error('ANI-RSS request timeout')),
-          10000
+          7000
         )
       ),
     ]);
@@ -545,12 +545,12 @@
 
   const aniRequestWithRetry = async (path, body) => {
     let lastError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         return await aniRequest(path, body);
       } catch (error) {
         lastError = error;
-        if (attempt < 2) {
+        if (attempt < 1) {
           await new Promise((resolve) =>
             window.setTimeout(resolve, 700 * 2 ** attempt)
           );
@@ -861,7 +861,7 @@
     return data;
   };
 
-  const mergeListData = async (data) => {
+  const mergeListData = async (data, onProgress) => {
     if (!data?.weekList) return data;
     initializeNativeData(data);
     if (!localStorage.getItem(TOKEN_KEY)) {
@@ -872,48 +872,55 @@
       abRules = await abRequest('/api/v1/bangumi/get/all');
       let sort = Math.max(0, ...aniItems.map((item) => Number(item.sort || 0))) + 1;
       let unresolved = 0;
-      const resolvedRules = await mapConcurrent(abRules, 2, async (rule) => {
-        const directMatch = aniItems.find((item) => sameTitle(item, rule));
-        if (directMatch) return { rule, metadata: null, directMatch };
-        return { rule, metadata: await queryMetadata(rule), directMatch: null };
-      });
-      for (const resolved of resolvedRules) {
-        const { rule, metadata } = resolved;
-        const match =
-          resolved.directMatch ||
-          aniItems.find((item) => sameTitle(item, rule, metadata));
-        if (match) {
-          match._abSource = text.both;
-          match._abRuleId = rule.id;
-          registerSource(match, text.both, rule, metadata);
-          continue;
-        }
+      const batchSize = 4;
+      for (let offset = 0; offset < abRules.length; offset += batchSize) {
+        const batch = abRules.slice(offset, offset + batchSize);
+        const resolvedRules = await mapConcurrent(batch, 2, async (rule) => {
+          const directMatch = aniItems.find((item) => sameTitle(item, rule));
+          if (directMatch) return { rule, metadata: null, directMatch };
+          return { rule, metadata: await queryMetadata(rule), directMatch: null };
+        });
+        for (const resolved of resolvedRules) {
+          const { rule, metadata } = resolved;
+          const match =
+            resolved.directMatch ||
+            aniItems.find((item) => sameTitle(item, rule, metadata));
+          if (match) {
+            match._abSource = text.both;
+            match._abRuleId = rule.id;
+            registerSource(match, text.both, rule, metadata);
+            continue;
+          }
 
-        if (metadata.notFound || !metadata.weekLabel) {
-          unresolved += 1;
-          continue;
+          if (metadata.notFound || !metadata.weekLabel) {
+            unresolved += 1;
+            continue;
+          }
+          const item = syntheticAni(rule, metadata, sort++);
+          let week = data.weekList.find(
+            (entry) => entry.weekLabel === item.weekLabel
+          );
+          if (!week) {
+            week = { weekLabel: item.weekLabel, items: [] };
+            data.weekList.push(week);
+          }
+          week.items.push(item);
+          aniItems.push(item);
+          registerSource(item, text.ab, rule, metadata);
+          const month = item.releaseDate.slice(0, 7);
+          if (
+            month !== '1970-01' &&
+            Array.isArray(data.releaseDateList) &&
+            !data.releaseDateList.includes(month)
+          ) {
+            data.releaseDateList.push(month);
+          }
         }
-        const item = syntheticAni(rule, metadata, sort++);
-        let week = data.weekList.find(
-          (entry) => entry.weekLabel === item.weekLabel
-        );
-        if (!week) {
-          week = { weekLabel: item.weekLabel, items: [] };
-          data.weekList.push(week);
-        }
-        week.items.push(item);
-        aniItems.push(item);
-        registerSource(item, text.ab, rule, metadata);
-        const month = item.releaseDate.slice(0, 7);
-        if (
-          month !== '1970-01' &&
-          Array.isArray(data.releaseDateList) &&
-          !data.releaseDateList.includes(month)
-        ) {
-          data.releaseDateList.push(month);
+        data.total = aniItems.length;
+        if (onProgress && offset + batchSize < abRules.length) {
+          onProgress(structuredClone(data));
         }
       }
-      data.total = aniItems.length;
       if (unresolved) {
         window.setTimeout(
           () =>
@@ -939,10 +946,13 @@
   const startBackgroundMerge = (data) => {
     if (merging || backgroundMerge || !localStorage.getItem(TOKEN_KEY)) return;
     merging = true;
-    backgroundMerge = mergeListData(structuredClone(data))
+    const publish = (merged) => {
+      readyMergedData = merged;
+      reloadMergedList(0);
+    };
+    backgroundMerge = mergeListData(structuredClone(data), publish)
       .then((merged) => {
-        readyMergedData = merged;
-        reloadMergedList(0);
+        publish(merged);
       })
       .finally(() => {
         merging = false;
