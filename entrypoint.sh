@@ -3,6 +3,8 @@
 
 umask ${UMASK}
 
+mkdir -p /app/config /app/data
+
 if [ -f /config/bangumi.json ]; then
     mv /config/bangumi.json /app/data/bangumi.json
 fi

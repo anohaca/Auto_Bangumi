@@ -1,29 +1,35 @@
-name: Build Docker
+name: CI and container
 
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - main
-  push:
+      - "maintain/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  test:
+  backend-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
-          pip install pytest
-      - name: Test
-        working-directory: ./backend/src
+          python -m pip install -r backend/requirements.txt pytest
+      - name: Run tests
+        working-directory: backend/src
         run: |
           mkdir -p config
           pytest
@@ -31,313 +37,78 @@ jobs:
   webui-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        name: Install pnpm
         with:
           version: 9
           run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - uses: actions/cache@v4
-        name: Setup pnpm cache
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: cd webui && pnpm install
-
-      - name: build test
-        run: |
-          cd webui && pnpm test:build
-
-  version-info:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: If release
-        id: release
-        run: |
-          if [[ '${{ github.event_name }}' == 'pull_request' && '${{ github.event.pull_request.head.ref }}' == *'dev'* ]]; then
-            if [ ${{ github.event.pull_request.merged }} == true ]; then
-              echo "release=1" >> $GITHUB_OUTPUT
-            else
-              echo "release=0" >> $GITHUB_OUTPUT
-            fi
-          elif [[ '${{ github.event_name }}' == 'push' && (${{ github.ref }} == *'alpha'* || ${{ github.ref }} == *'beta'*) ]]; then
-            echo "release=1" >> $GITHUB_OUTPUT
-          else
-            echo "release=0" >> $GITHUB_OUTPUT
-          fi
-      - name: If dev
-        id: dev
-        run: |
-          if [[ '${{ github.event_name }}' == 'push' && (${{ github.ref }} == *'alpha'* || ${{ github.ref }} == *'beta'*) ]]; then
-            echo "dev=1" >> $GITHUB_OUTPUT
-          else
-            echo "dev=0" >> $GITHUB_OUTPUT
-          fi
-      - name: Check version
-        id: version
-        run: |
-          if [ '${{ github.event_name }}' == 'pull_request' ]; then
-            if [ ${{ github.event.pull_request.merged }} == true ]; then
-              echo "version=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
-            fi
-          elif [[ ${{ github.event_name }} == 'push' && (${{ github.ref }} == *'alpha'* || ${{ github.ref }} == *'beta'*) ]]; then
-            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=Test" >> $GITHUB_OUTPUT
-          fi
-      - name: Check result
-        run: |
-          echo "release: ${{ steps.release.outputs.release }}"
-          echo "dev: ${{ steps.dev.outputs.dev }}"
-          echo "version: ${{ steps.version.outputs.version }}"
-    outputs:
-      release: ${{ steps.release.outputs.release }}
-      dev: ${{ steps.dev.outputs.dev }}
-      version: ${{ steps.version.outputs.version }}
-
-  build-webui:
-    runs-on: ubuntu-latest
-    needs: [test, webui-test, version-info]
-    if: ${{ needs.version-info.outputs.release == 1 || needs.version-info.outputs.dev == 1 }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - uses: pnpm/action-setup@v4
-        name: Install pnpm
-        with:
-          version: 9
-          run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - uses: actions/cache@v4
-        name: Setup pnpm cache
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
       - name: Install dependencies
-        run: cd webui && pnpm install
-
+        working-directory: webui
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        working-directory: webui
+        run: pnpm test:build
       - name: Build
-        run: |
-          cd webui && pnpm build
+        working-directory: webui
+        run: pnpm build
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: dist
-          path: webui/dist
-
-  build-docker:
+  container:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - backend-test
+      - webui-test
     runs-on: ubuntu-latest
-    needs: [build-webui, version-info]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create Version info via tag
-        working-directory: ./backend/src
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
+      - name: Build WebUI
+        working-directory: webui
         run: |
-          echo ${{ needs.version-info.outputs.version }}
-          echo "VERSION='${{ needs.version-info.outputs.version }}'" >> module/__version__.py
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Docker metadata main
-        if: ${{ needs.version-info.outputs.release == 1 && needs.version-info.outputs.dev != 1 }}
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: |
-            estrellaxd/auto_bangumi
-            ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=${{ needs.version-info.outputs.version }}
-            type=raw,value=latest
-
-      - name: Docker metadata dev
-        if: ${{ needs.version-info.outputs.dev == 1 }}
-        id: meta-dev
-        uses: docker/metadata-action@v4
-        with:
-          images: |
-            estrellaxd/auto_bangumi
-            ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=${{ needs.version-info.outputs.version }}
-            type=raw,value=dev-latest
-
-      - name: Login to DockerHub
-        if: ${{ needs.version-info.outputs.release == 1 }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-      - name: Login to ghcr.io
-        if: ${{ needs.version-info.outputs.release == 1 }}
-        uses: docker/login-action@v2
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Prepare application
+        run: |
+          cp -R webui/dist backend/src/dist
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="3.1.18-maintained"
+          fi
+          printf "VERSION='%s'\n" "$version" > backend/src/module/__version__.py
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.ACCESS_TOKEN }}
-
-      - name: Download artifact
-        uses: actions/download-artifact@v3
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          name: dist
-          path: backend/src/dist
-
-      - name: Build and push
-        if: ${{ needs.version-info.outputs.release == 1 && needs.version-info.outputs.dev != 1 }}
-        uses: docker/build-push-action@v4
+          images: ghcr.io/${{ github.repository_owner }}/auto_bangumi
+          tags: |
+            type=ref,event=tag
+            type=raw,value=maintain-3.1.18,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha
+      - uses: docker/build-push-action@v6
         with:
           context: .
-          builder: ${{ steps.buildx.output.name }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: True
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha, scope=${{ github.workflow }}
-          cache-to: type=gha, scope=${{ github.workflow }}
-
-      - name: Build and push dev
-        if: ${{ needs.version-info.outputs.dev == 1 }}
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          builder: ${{ steps.buildx.output.name }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta-dev.outputs.tags }}
-          labels: ${{ steps.meta-dev.outputs.labels }}
-          cache-from: type=gha, scope=${{ github.workflow }}
-          cache-to: type=gha, scope=${{ github.workflow }}
-
-      - name: Build test
-        if: ${{ needs.version-info.outputs.release == 0 }}
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          builder: ${{ steps.buildx.output.name }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: false
-          tags: estrellaxd/auto_bangumi:test
-          cache-from: type=gha, scope=${{ github.workflow }}
-          cache-to: type=gha, scope=${{ github.workflow }}
-
-  release:
-    runs-on: ubuntu-latest
-    needs: [build-docker, version-info]
-    if: ${{ needs.version-info.outputs.release == 1 }}
-    outputs:
-      url: ${{ steps.release.outputs.url }}
-      version: ${{ needs.version-info.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download artifact webui
-        uses: actions/download-artifact@v3
-        with:
-          name: dist
-          path: webui/dist
-
-      - name: Zip webui
-        run: |
-          cd webui && ls -al && tree && zip -r dist.zip dist
-
-      - name: Download artifact app
-        uses: actions/download-artifact@v3
-        with:
-          name: dist
-          path: backend/src/dist
-
-      - name: Create Version info via tag
-        working-directory: ./backend/src
-        run: |
-          echo ${{ needs.version-info.outputs.version }}
-          echo "VERSION='${{ needs.version-info.outputs.version }}'" >> module/__version__.py
-
-      - name: Copy requirements.txt
-        working-directory: ./backend
-        run: cp requirements.txt src/requirements.txt
-
-      - name: Zip app
-        run: |
-          cd backend && zip -r app-v${{ needs.version-info.outputs.version }}.zip src
-
-      - name: Generate Release info
-        id: release-info
-        run: |
-          if ${{ needs.version-info.outputs.dev == 1 }}; then
-            echo "version=🌙${{ needs.version-info.outputs.version }}" >> $GITHUB_OUTPUT
-            echo "pre_release=true" >> $GITHUB_OUTPUT
-          else
-            echo "version=🌟${{ needs.version-info.outputs.version }}" >> $GITHUB_OUTPUT
-            echo "pre_release=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Release
-        id: release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.version-info.outputs.version }}
-          name: ${{ steps.release-info.outputs.version }}
-          body: ${{ github.event.pull_request.body }}
-          draft: false
-          prerelease: ${{ steps.release-info.outputs.pre_release == 'true' }}
-          files: |
-            webui/dist.zip
-            backend/app-v${{ needs.version-info.outputs.version }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-
-  telegram:
-    runs-on: ubuntu-latest
-    needs: [release]
-    steps:
-      - name: send telegram message on push
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            New release: ${{ needs.release.outputs.version }}
-            Link: ${{ needs.release.outputs.url }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -2,6 +2,14 @@
 
 FROM alpine:3.18
 
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG all_proxy
+ARG no_proxy
+
 ENV LANG="C.UTF-8" \
     TZ=Asia/Shanghai \
     PUID=1000 \
