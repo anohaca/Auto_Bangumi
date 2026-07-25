@@ -90,3 +90,60 @@ def test_query_rule_accepts_fuzzy_translated_title_and_logs_process(
     assert "candidates=1" in caplog.text
     assert "selected id=545008" in caplog.text
     assert "weekday=星期日" in caplog.text
+
+
+def test_query_rule_rejects_low_confidence_candidate(monkeypatch, caplog):
+    rule = SimpleNamespace(
+        id=44,
+        official_title="提欧奥特曼",
+        title_raw="Ultraman Teo",
+        rule_name="",
+        season=1,
+        year="2026",
+    )
+
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_post",
+        lambda path: [
+            {
+                "id": "137377",
+                "name": "Animator Expo",
+                "nameCn": "动画大师 第二季",
+                "season": 1,
+            }
+        ],
+    )
+    with caplog.at_level("INFO"):
+        try:
+            AniRssMetadataCache._query_rule(rule)
+        except LookupError as error:
+            assert str(error) == "not found"
+        else:
+            raise AssertionError("low-confidence candidate must be rejected")
+
+    assert "rejected" in caplog.text
+
+
+def test_score_prefers_second_season_marker():
+    rule = SimpleNamespace(
+        official_title="不愉快的妖怪庵",
+        title_raw="Fukigen na Mononokean",
+        rule_name="",
+        season=2,
+        year="2016",
+    )
+    first = {
+        "name": "不機嫌なモノノケ庵",
+        "nameCn": "忧郁的物怪庵",
+        "season": 1,
+    }
+    second = {
+        "name": "不機嫌なモノノケ庵 續",
+        "nameCn": "忧郁的物怪庵 续",
+        "season": 1,
+    }
+
+    assert AniRssMetadataCache._score(second, rule) > AniRssMetadataCache._score(
+        first, rule
+    )

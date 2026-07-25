@@ -24,6 +24,7 @@ class AniRssMetadataCache:
     refresh_lock = asyncio.Lock()
     success_ttl = 30 * 86400
     failure_ttl = 6 * 3600
+    minimum_match_score = 45
 
     @classmethod
     def _origin(cls) -> str:
@@ -103,6 +104,15 @@ class AniRssMetadataCache:
             score += 8
         if rule.season and int(candidate.get("season") or 0) == int(rule.season):
             score += 8
+        candidate_title = " ".join(
+            str(candidate.get(key) or "") for key in ("name", "nameCn")
+        )
+        if int(rule.season or 1) == 2 and re.search(
+            r"(?:续|續|続|第\s*二|第\s*2|season\s*2|2nd|(?:^|\W)ii(?:\W|$))",
+            unicodedata.normalize("NFKC", candidate_title),
+            re.IGNORECASE,
+        ):
+            score += 12
         return score
 
     @classmethod
@@ -141,7 +151,7 @@ class AniRssMetadataCache:
             )
             if candidate_score >= 100:
                 break
-        if not candidate or candidate_score < 30:
+        if not candidate or candidate_score < cls.minimum_match_score:
             logger.warning(
                 "[ANI-RSS Match] rule=%s title=%r rejected: best=%r score=%d",
                 rule.id,
@@ -162,6 +172,20 @@ class AniRssMetadataCache:
         )
         detail = cls._post("getAniBySubjectId?id=" + quote(str(candidate["id"]))) or {}
         release_date = detail.get("releaseDate") or candidate.get("date") or ""
+        if (
+            int(rule.season or 1) == 1
+            and rule.year
+            and release_date
+            and not str(release_date).startswith(str(rule.year))
+        ):
+            logger.warning(
+                "[ANI-RSS Match] rule=%s id=%s rejected: release year %s != %s",
+                rule.id,
+                candidate.get("id"),
+                str(release_date)[:4],
+                rule.year,
+            )
+            raise LookupError("release year mismatch")
         week_label = detail.get("weekLabel") or ""
         if not week_label and release_date:
             from datetime import date
