@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
             r"(?:\.\d{1,3}){2}|[A-Za-z0-9-]+\.local):7789$"
         ),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
 
