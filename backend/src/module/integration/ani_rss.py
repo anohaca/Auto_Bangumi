@@ -195,15 +195,31 @@ class AniRssMetadataCache:
                 async with semaphore:
                     try:
                         metadata = await asyncio.to_thread(cls._query_with_retry, rule)
+                        logger.info(
+                            "[ANI-RSS Cache] %s -> %s",
+                            rule.official_title,
+                            metadata.get("weekLabel") or "unknown",
+                        )
                     except Exception as exc:
                         metadata = {
                             "notFound": True,
                             "error": str(exc),
                             "cachedAt": int(time.time()),
                         }
+                        logger.warning(
+                            "[ANI-RSS Cache] Cannot resolve %s: %s",
+                            rule.official_title,
+                            exc,
+                        )
                     entries[key] = metadata
                     cls._save(cache)
 
+            logger.info(
+                "[ANI-RSS Cache] %d rules, %d cache hits, %d to refresh",
+                len(rules),
+                len(rules) - len(missing),
+                len(missing),
+            )
             await asyncio.gather(*(refresh(rule, key) for rule, key in missing))
             items = []
             for rule, payload in zip(rules, rule_payloads):
@@ -213,9 +229,15 @@ class AniRssMetadataCache:
                         "metadata": entries.get(cls._rule_key(rule), {}),
                     }
                 )
-            return {
+            result = {
                 "items": items,
                 "cached": len(items) - len(missing),
                 "refreshed": len(missing),
                 "updatedAt": int(time.time()),
             }
+            logger.info(
+                "[ANI-RSS Cache] Ready: %d items (%d resolved)",
+                len(items),
+                sum(not item["metadata"].get("notFound") for item in items),
+            )
+            return result
