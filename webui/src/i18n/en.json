@@ -104,7 +104,7 @@
     "update_success": "Update Success!"
   },
   "calendar": {
-    "description": "AutoBangumi shows grouped by ANI-RSS metadata",
+    "description": "AutoBangumi shows grouped by TMDB season dates",
     "empty": "No anime data yet",
     "load_error": "Failed to load the calendar. Please try again.",
     "loading": "Loading weekday information...",
@@ -134,7 +134,6 @@
     "url": "Url"
   },
   "sidebar": {
-    "ani_rss": "ANI-RSS",
     "calendar": "Calendar",
     "config": "Config",
     "downloader": "Downloader",

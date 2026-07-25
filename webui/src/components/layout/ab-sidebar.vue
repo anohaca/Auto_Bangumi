@@ -53,12 +53,6 @@ const items = [
     path: '/rss',
   },
   {
-    id: 4,
-    icon: RSS,
-    label: () => t('sidebar.ani_rss'),
-    path: '/ani-rss',
-  },
-  {
     id: 5,
     icon: Download,
     label: () => t('sidebar.downloader'),
