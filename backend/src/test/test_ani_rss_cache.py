@@ -53,6 +53,14 @@ def test_rule_key_changes_when_matching_fields_change():
     assert AniRssMetadataCache._rule_key(rule) != original
 
 
+def test_exact_text_ignores_internal_whitespace():
+    assert AniRssMetadataCache._exact_text(
+        "感谢对战。～大小姐才不玩格斗游戏～"
+    ) == AniRssMetadataCache._exact_text(
+        "感谢对战。 \u3000～大小姐才不玩格斗游戏～"
+    )
+
+
 def test_query_rule_uses_tmdb_japanese_after_chinese_miss(monkeypatch, caplog):
     rule = SimpleNamespace(
         id=23,

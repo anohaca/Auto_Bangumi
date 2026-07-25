@@ -79,7 +79,8 @@ class AniRssMetadataCache:
 
     @staticmethod
     def _exact_text(value: Any) -> str:
-        return unicodedata.normalize("NFKC", str(value or "")).strip()
+        text = unicodedata.normalize("NFKC", str(value or ""))
+        return re.sub(r"\s+", "", text)
 
     @classmethod
     def _tmdb_original_title(cls, rule) -> str:
