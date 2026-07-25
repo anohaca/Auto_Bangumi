@@ -88,7 +88,7 @@ const listResult = () => ({
   },
 });
 
-const run = async (withToken) => {
+const run = async (withToken, metadataDelay = 0) => {
   const storage = new Map([
     ['authorization', 'ani-token'],
     ...(withToken ? [['autobangumi_access_token', 'ab-token']] : []),
@@ -108,6 +108,9 @@ const run = async (withToken) => {
     if (url.pathname === '/api/listAni') return json(listResult());
     if (url.pathname === '/api/v1/bangumi/get/all') return json(rules);
     if (url.pathname === '/api/searchBgm') {
+      if (metadataDelay) {
+        await new Promise((resolve) => setTimeout(resolve, metadataDelay));
+      }
       return json({
         code: 200,
         message: 'success',
@@ -125,6 +128,9 @@ const run = async (withToken) => {
       });
     }
     if (url.pathname === '/api/getAniBySubjectId') {
+      if (metadataDelay) {
+        await new Promise((resolve) => setTimeout(resolve, metadataDelay));
+      }
       return json({
         code: 200,
         message: 'success',
@@ -197,11 +203,38 @@ const run = async (withToken) => {
     clearTimeout: window.clearTimeout,
   });
   vm.runInContext(source, context);
-  const response = await window.fetch('/api/listAni', { method: 'POST' });
-  return { result: await response.json(), calls };
+  const startedAt = Date.now();
+  const firstResponse = await window.fetch('/api/listAni', { method: 'POST' });
+  const firstResult = await firstResponse.json();
+  const firstElapsed = Date.now() - startedAt;
+  if (withToken) {
+    const deadline = Date.now() + 3000;
+    while (
+      !calls.some((call) => call.includes('/api/getAniBySubjectId')) &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await new Promise((resolve) => setTimeout(resolve, metadataDelay + 10));
+    const mergedResponse = await window.fetch('/api/listAni', {
+      method: 'POST',
+    });
+    return {
+      result: await mergedResponse.json(),
+      firstResult,
+      firstElapsed,
+      calls,
+    };
+  }
+  return { result: firstResult, firstResult, firstElapsed, calls };
 };
 
-const authenticated = await run(true);
+const authenticated = await run(true, 100);
+assert.equal(authenticated.firstResult.data.total, 2);
+assert.ok(
+  authenticated.firstElapsed < 80,
+  `native list was blocked for ${authenticated.firstElapsed}ms`
+);
 const weeks = authenticated.result.data.weekList;
 const items = weeks.flatMap((week) => week.items);
 

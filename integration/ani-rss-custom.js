@@ -396,6 +396,8 @@
   let aniItems = [];
   let mergeTimer = 0;
   let merging = false;
+  let backgroundMerge = null;
+  let readyMergedData = null;
   const sourceRegistry = new Map();
   const nativeFetch = window.fetch.bind(window);
 
@@ -520,11 +522,19 @@
     const authorization = localStorage.getItem('authorization');
     if (authorization) headers.Authorization = authorization;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await fetch('/api/' + path, {
-      method: 'POST',
-      headers,
-      body: body === undefined ? null : JSON.stringify(body),
-    });
+    const response = await Promise.race([
+      fetch('/api/' + path, {
+        method: 'POST',
+        headers,
+        body: body === undefined ? null : JSON.stringify(body),
+      }),
+      new Promise((_, reject) =>
+        window.setTimeout(
+          () => reject(new Error('ANI-RSS request timeout')),
+          10000
+        )
+      ),
+    ]);
     if (!response.ok) throw new Error('ANI-RSS http ' + response.status);
     const result = await response.json();
     if (result.code < 200 || result.code >= 300) {
@@ -651,8 +661,9 @@
             : ''),
         cachedAt: Date.now(),
       };
-      cache[key] = metadata;
-      saveCache(cache);
+      const latest = loadCache();
+      latest[key] = metadata;
+      saveCache(latest);
       return metadata;
     } catch {
       const fallback = {
@@ -663,10 +674,27 @@
         notFound: true,
         cachedAt: Date.now(),
       };
-      cache[key] = fallback;
-      saveCache(cache);
+      const latest = loadCache();
+      latest[key] = fallback;
+      saveCache(latest);
       return fallback;
     }
+  };
+
+  const mapConcurrent = async (items, limit, mapper) => {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(limit, items.length) },
+      async () => {
+        while (cursor < items.length) {
+          const index = cursor++;
+          results[index] = await mapper(items[index], index);
+        }
+      }
+    );
+    await Promise.all(workers);
+    return results;
   };
 
   const posterUrl = (rule, metadata) => {
@@ -802,9 +830,7 @@
     }
   };
 
-  const mergeListData = async (data) => {
-    if (merging || !data?.weekList) return data;
-    merging = true;
+  const initializeNativeData = (data) => {
     sourceRegistry.clear();
     aniItems = data.weekList.flatMap((week) =>
       (week.items || []).map((item) => {
@@ -814,8 +840,14 @@
         return item;
       })
     );
+    data.total = aniItems.length;
+    return data;
+  };
+
+  const mergeListData = async (data) => {
+    if (!data?.weekList) return data;
+    initializeNativeData(data);
     if (!localStorage.getItem(TOKEN_KEY)) {
-      merging = false;
       return data;
     }
 
@@ -823,13 +855,16 @@
       abRules = await abRequest('/api/v1/bangumi/get/all');
       let sort = Math.max(0, ...aniItems.map((item) => Number(item.sort || 0))) + 1;
       let unresolved = 0;
-      for (const rule of abRules) {
-        let metadata = null;
-        let match = aniItems.find((item) => sameTitle(item, rule));
-        if (!match) {
-          metadata = await queryMetadata(rule);
-          match = aniItems.find((item) => sameTitle(item, rule, metadata));
-        }
+      const resolvedRules = await mapConcurrent(abRules, 4, async (rule) => {
+        const directMatch = aniItems.find((item) => sameTitle(item, rule));
+        if (directMatch) return { rule, metadata: null, directMatch };
+        return { rule, metadata: await queryMetadata(rule), directMatch: null };
+      });
+      for (const resolved of resolvedRules) {
+        const { rule, metadata } = resolved;
+        const match =
+          resolved.directMatch ||
+          aniItems.find((item) => sameTitle(item, rule, metadata));
         if (match) {
           match._abSource = text.both;
           match._abRuleId = rule.id;
@@ -837,7 +872,6 @@
           continue;
         }
 
-        metadata ||= await queryMetadata(rule);
         if (metadata.notFound || !metadata.weekLabel) {
           unresolved += 1;
           continue;
@@ -881,10 +915,22 @@
           0
         );
       }
-    } finally {
-      merging = false;
     }
     return data;
+  };
+
+  const startBackgroundMerge = (data) => {
+    if (merging || backgroundMerge || !localStorage.getItem(TOKEN_KEY)) return;
+    merging = true;
+    backgroundMerge = mergeListData(structuredClone(data))
+      .then((merged) => {
+        readyMergedData = merged;
+        reloadMergedList(0);
+      })
+      .finally(() => {
+        merging = false;
+        backgroundMerge = null;
+      });
   };
 
   window.fetch = async (input, options = {}) => {
@@ -901,7 +947,13 @@
     try {
       const result = await response.clone().json();
       if (result.code >= 200 && result.code < 300) {
-        result.data = await mergeListData(result.data);
+        if (readyMergedData) {
+          result.data = readyMergedData;
+          readyMergedData = null;
+        } else {
+          result.data = initializeNativeData(result.data);
+          startBackgroundMerge(result.data);
+        }
         const headers = new Headers(response.headers);
         headers.delete('content-length');
         headers.delete('content-encoding');
