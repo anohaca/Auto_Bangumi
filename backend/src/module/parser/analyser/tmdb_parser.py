@@ -74,6 +74,7 @@ def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
             season = [
                 {
                     "season": s.get("name"),
+                    "season_number": s.get("season_number"),
                     "air_date": s.get("air_date"),
                     "poster_path": s.get("poster_path"),
                 }

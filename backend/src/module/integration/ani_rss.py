@@ -1,16 +1,12 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import threading
 import time
 import unicodedata
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
-
-import requests
 
 from module.database import Database
 from module.parser.analyser import tmdb_parser
@@ -24,10 +20,6 @@ class AniRssMetadataCache:
     refresh_lock = asyncio.Lock()
     success_ttl = 30 * 86400
     failure_ttl = 6 * 3600
-
-    @classmethod
-    def _origin(cls) -> str:
-        return os.getenv("ANI_RSS_ORIGIN", "http://192.168.64.1:7789").rstrip("/")
 
     @staticmethod
     def _normalize(value: Any) -> str:
@@ -69,137 +61,50 @@ class AniRssMetadataCache:
             temporary.replace(cls.cache_path)
 
     @classmethod
-    def _post(cls, path: str) -> Any:
-        response = requests.post(cls._origin() + "/api/" + path, timeout=8)
-        response.raise_for_status()
-        result = response.json()
-        if not 200 <= int(result.get("code", 500)) < 300:
-            raise RuntimeError(result.get("message") or "ANI-RSS request failed")
-        return result.get("data")
-
-    @staticmethod
-    def _exact_text(value: Any) -> str:
-        text = unicodedata.normalize("NFKC", str(value or ""))
-        return re.sub(r"\s+", "", text)
-
-    @classmethod
-    def _tmdb_original_title(cls, rule) -> str:
-        title = rule.official_title
-        if not title:
-            return ""
-        try:
-            info = tmdb_parser(title, "jp", test=True)
-        except Exception as exc:
-            logger.debug(
-                "[ANI-RSS Match] rule=%s TMDB query=%r failed: %s",
-                rule.id,
-                title,
-                exc,
-            )
-            return ""
-        if info and info.original_title:
-            logger.debug(
-                "[ANI-RSS Match] rule=%s TMDB query=%r original=%r",
-                rule.id,
-                title,
-                info.original_title,
-            )
-            return info.original_title
-        logger.debug(
-            "[ANI-RSS Match] rule=%s TMDB query=%r has no original title",
-            rule.id,
-            title,
-        )
-        return ""
-
-    @classmethod
-    def _search_exact(
-        cls, rule, query: str, candidate_field: str, stage: str
-    ) -> dict[str, Any] | None:
-        items = cls._post("searchBgm?name=" + quote(query))
-        items = items if isinstance(items, list) else []
-        expected = cls._exact_text(query)
-        matches = [
-            item
-            for item in items
-            if cls._exact_text(item.get(candidate_field)) == expected
-        ]
-        logger.debug(
-            "[ANI-RSS Match] rule=%s stage=%s query=%r candidates=%d exact=%d",
-            rule.id,
-            stage,
-            query,
-            len(items),
-            len(matches),
-        )
-        return matches[0] if matches else None
-
-    @classmethod
     def _query_rule(cls, rule) -> dict[str, Any]:
-        chinese_queries = list(
-            dict.fromkeys(
-                value
-                for value in [rule.official_title, rule.title_raw, rule.rule_name]
-                if value and re.search(r"[\u3400-\u9fff]", value)
-            )
-        )
-        candidate = None
-        matched_stage = ""
-        for query in chinese_queries:
-            candidate = cls._search_exact(rule, query, "nameCn", "chinese")
-            if candidate:
-                matched_stage = "chinese"
-                break
-
-        if not candidate:
-            japanese_title = cls._tmdb_original_title(rule)
-            if japanese_title:
-                candidate = cls._search_exact(
-                    rule, japanese_title, "name", "tmdb-japanese"
-                )
-                if candidate:
-                    matched_stage = "tmdb-japanese"
-
-        if not candidate:
+        info = tmdb_parser(rule.official_title, "zh", test=True)
+        if not info:
             raise LookupError("not found")
-        detail = cls._post("getAniBySubjectId?id=" + quote(str(candidate["id"]))) or {}
-        release_date = detail.get("releaseDate") or candidate.get("date") or ""
-        week_label = detail.get("weekLabel") or ""
-        if not week_label and release_date:
-            from datetime import date
 
-            parsed = date.fromisoformat(str(release_date)[:10])
-            week_label = [
-                "星期一",
-                "星期二",
-                "星期三",
-                "星期四",
-                "星期五",
-                "星期六",
-                "星期日",
-            ][parsed.weekday()]
+        season_number = int(rule.season or 1)
+        season = next(
+            (
+                item
+                for item in info.season
+                if int(item.get("season_number") or -1) == season_number
+            ),
+            None,
+        )
+        release_date = (season or {}).get("air_date") or ""
+        if not release_date:
+            raise LookupError(f"TMDB season {season_number} has no air date")
+
+        from datetime import date
+
+        parsed = date.fromisoformat(str(release_date)[:10])
+        week_label = [
+            "星期一",
+            "星期二",
+            "星期三",
+            "星期四",
+            "星期五",
+            "星期六",
+            "星期日",
+        ][parsed.weekday()]
         logger.info(
-            "[ANI-RSS Match] %s -> %s | %s | %s",
+            "[TMDB Calendar] %s -> %s | %s | %s",
             rule.official_title,
-            candidate.get("nameCn") or candidate.get("name") or "-",
+            info.title,
             week_label or "未确定星期",
-            "中文精确" if matched_stage == "chinese" else "TMDB 日文",
+            f"TMDB S{season_number} {release_date}",
         )
         return {
-            **detail,
-            "bgmId": str(candidate["id"]),
-            "bgmName": candidate.get("name"),
-            "title": candidate.get("nameCn")
-            or detail.get("title")
-            or candidate.get("name"),
-            "jpTitle": candidate.get("name") or detail.get("jpTitle"),
-            "season": detail.get("season") or candidate.get("season"),
-            "score": detail.get("score")
-            or (candidate.get("rating") or {}).get("score")
-            or 0,
-            "image": detail.get("image")
-            or (candidate.get("images") or {}).get("large")
-            or "",
+            "tmdbId": str(info.id),
+            "title": info.title,
+            "jpTitle": info.original_title,
+            "season": season_number,
+            "score": 0,
+            "image": info.poster_link or "",
             "releaseDate": release_date,
             "weekLabel": week_label,
             "cachedAt": int(time.time()),
@@ -249,7 +154,7 @@ class AniRssMetadataCache:
                             "cachedAt": int(time.time()),
                         }
                         logger.warning(
-                            "[ANI-RSS Match] %s -> 未匹配 (%s)",
+                            "[TMDB Calendar] %s -> 未匹配 (%s)",
                             rule.official_title,
                             exc,
                         )
@@ -257,7 +162,7 @@ class AniRssMetadataCache:
                     cls._save(cache)
 
             logger.info(
-                "[ANI-RSS Cache] %d rules, %d cache hits, %d to refresh",
+                "[TMDB Calendar] %d rules, %d cache hits, %d to refresh",
                 len(rules),
                 len(rules) - len(missing),
                 len(missing),
@@ -278,7 +183,7 @@ class AniRssMetadataCache:
                 "updatedAt": int(time.time()),
             }
             logger.info(
-                "[ANI-RSS Cache] Ready: %d items (%d resolved)",
+                "[TMDB Calendar] Ready: %d items (%d resolved)",
                 len(items),
                 sum(not item["metadata"].get("notFound") for item in items),
             )
