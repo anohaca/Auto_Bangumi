@@ -1,4 +1,5 @@
 import asyncio
+from difflib import SequenceMatcher
 import json
 import logging
 import os
@@ -93,7 +94,11 @@ class AniRssMetadataCache:
         for name in names:
             for target in targets:
                 if name in target or target in name:
-                    score += 35
+                    score = max(score, 70)
+                score = max(
+                    score,
+                    round(SequenceMatcher(None, name, target).ratio() * 100),
+                )
         if rule.year and str(candidate.get("date", "")).startswith(str(rule.year)):
             score += 8
         if rule.season and int(candidate.get("season") or 0) == int(rule.season):
@@ -113,15 +118,48 @@ class AniRssMetadataCache:
         candidate_score = -1
         for query in queries:
             items = cls._post("searchBgm?name=" + quote(query))
-            for item in items if isinstance(items, list) else []:
+            items = items if isinstance(items, list) else []
+            query_best = None
+            query_best_score = -1
+            for item in items:
                 score = cls._score(item, rule)
+                if score > query_best_score:
+                    query_best = item
+                    query_best_score = score
                 if score > candidate_score:
                     candidate = item
                     candidate_score = score
+            logger.info(
+                "[ANI-RSS Match] rule=%s query=%r candidates=%d best=%r score=%d",
+                rule.id,
+                query,
+                len(items),
+                (query_best or {}).get("nameCn")
+                or (query_best or {}).get("name")
+                or "-",
+                query_best_score,
+            )
             if candidate_score >= 100:
                 break
         if not candidate or candidate_score < 30:
+            logger.warning(
+                "[ANI-RSS Match] rule=%s title=%r rejected: best=%r score=%d",
+                rule.id,
+                rule.official_title,
+                (candidate or {}).get("nameCn")
+                or (candidate or {}).get("name")
+                or "-",
+                candidate_score,
+            )
             raise LookupError("not found")
+        logger.info(
+            "[ANI-RSS Match] rule=%s title=%r selected id=%s name=%r score=%d",
+            rule.id,
+            rule.official_title,
+            candidate.get("id"),
+            candidate.get("nameCn") or candidate.get("name"),
+            candidate_score,
+        )
         detail = cls._post("getAniBySubjectId?id=" + quote(str(candidate["id"]))) or {}
         release_date = detail.get("releaseDate") or candidate.get("date") or ""
         week_label = detail.get("weekLabel") or ""
@@ -138,6 +176,13 @@ class AniRssMetadataCache:
                 "星期六",
                 "星期日",
             ][parsed.weekday()]
+        logger.info(
+            "[ANI-RSS Match] rule=%s id=%s release=%s weekday=%s",
+            rule.id,
+            candidate.get("id"),
+            release_date or "-",
+            week_label or "unknown",
+        )
         return {
             **detail,
             "bgmId": str(candidate["id"]),
