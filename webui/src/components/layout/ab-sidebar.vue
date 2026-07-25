@@ -6,7 +6,6 @@ import {
   Log,
   Logout,
   MenuUnfold,
-  Play,
   SettingTwo,
 } from '@icon-park/vue-next';
 import InlineSvg from 'vue-inline-svg';
@@ -55,12 +54,6 @@ const items = [
     path: '/rss',
   },
   {
-    id: 4,
-    icon: Play,
-    label: () => t('sidebar.player'),
-    path: '/player',
-  },
-  {
     id: 5,
     icon: Download,
     label: () => t('sidebar.downloader'),
@@ -105,7 +98,7 @@ function Exit() {
   );
 }
 
-const mobileItems = computed(() => items.filter((i) => i.id !== 4));
+const mobileItems = computed(() => items);
 </script>
 
 <template>

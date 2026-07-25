@@ -11,17 +11,6 @@
       "type": "Downloader Type",
       "username": "Username"
     },
-    "experimental_openai_set": {
-      "api_base": "OpenAI API Base URL (Azure entrypoint)",
-      "api_key": "OpenAI API Key",
-      "api_type": "OpenAI API Type",
-      "api_version": "Azure OpenAI Version",
-      "deployment_id": "Azure OpenAI Deployment ID",
-      "enable": "Enable OpenAI",
-      "model": "OpenAI Model",
-      "title": "Experimental Setting",
-      "warning": "Warning: Experimental feature is not yet stable. Please use with caution."
-    },
     "manage_set": {
       "delete_bad_torrent": "Delete Bad Torrent",
       "enable": "Enable",
@@ -29,11 +18,6 @@
       "group_tag": "Add Group Tag",
       "method": "Rename Method",
       "title": "Manage Setting"
-    },
-    "media_player_set": {
-      "title": "Media Player Setting",
-      "type": "type",
-      "url": "url"
     },
     "normal_set": {
       "debug": "Debug",
@@ -119,9 +103,6 @@
     "update_failed": "Update Failed!",
     "update_success": "Update Success!"
   },
-  "player": {
-    "hit": "Please set up the media player"
-  },
   "rss": {
     "delete": "Delete",
     "disable": "Disable",
@@ -139,7 +120,6 @@
     "homepage": "HomePage",
     "log": "Log",
     "logout": "Logout",
-    "player": "Player",
     "rss": "RSS Manager",
     "title": "Menu"
   },

@@ -94,7 +94,6 @@ declare global {
   const useLogStore: typeof import('../../src/store/log')['useLogStore']
   const useMessage: typeof import('../../src/hooks/useMessage')['useMessage']
   const useMyI18n: typeof import('../../src/hooks/useMyI18n')['useMyI18n']
-  const usePlayerStore: typeof import('../../src/store/player')['usePlayerStore']
   const useProgramStore: typeof import('../../src/store/program')['useProgramStore']
   const useRSSStore: typeof import('../../src/store/rss')['useRSSStore']
   const useRoute: typeof import('vue-router/auto')['useRoute']

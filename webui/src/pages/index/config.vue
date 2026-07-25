@@ -29,10 +29,6 @@ onActivated(() => {
           <config-notification></config-notification>
 
           <config-proxy></config-proxy>
-
-          <config-player></config-player>
-
-          <config-openai></config-openai>
         </div>
       </div>
 

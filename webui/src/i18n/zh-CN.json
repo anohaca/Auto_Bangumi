@@ -11,17 +11,6 @@
       "type": "下载器类型",
       "username": "用户名"
     },
-    "experimental_openai_set": {
-      "api_base": "OpenAI API Base URL (Azure entrypoint)",
-      "api_key": "OpenAI API Key",
-      "api_type": "OpenAI API 类型",
-      "api_version": "Azure OpenAI 版本",
-      "deployment_id": "Azure OpenAI Deployment ID",
-      "enable": "启用 OpenAI",
-      "model": "OpenAI 模型",
-      "title": "实验功能设置",
-      "warning": "警告：实验功能尚未稳定，请谨慎使用"
-    },
     "manage_set": {
       "delete_bad_torrent": "删除坏种",
       "enable": "启用",
@@ -29,11 +18,6 @@
       "group_tag": "添加组标签",
       "method": "重命名方式",
       "title": "番剧管理设置"
-    },
-    "media_player_set": {
-      "title": "播放器设置",
-      "type": "类型",
-      "url": "播放器地址"
     },
     "normal_set": {
       "debug": "调试",
@@ -119,9 +103,6 @@
     "update_failed": "更新失败!",
     "update_success": "更新成功!"
   },
-  "player": {
-    "hit": "请设置媒体播放器地址"
-  },
   "rss": {
     "delete": "删除",
     "disable": "禁用",
@@ -139,7 +120,6 @@
     "homepage": "主页",
     "log": "日志",
     "logout": "退出",
-    "player": "播放器",
     "rss": "RSS 管理",
     "title": "菜单"
   },
