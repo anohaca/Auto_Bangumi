@@ -178,8 +178,9 @@ class AniRssMetadataCache:
                 "星期日",
             ][parsed.weekday()]
         logger.info(
-            "[ANI-RSS Match] %s -> %s (%s)",
+            "[ANI-RSS Match] %s -> %s | %s | %s",
             rule.official_title,
+            candidate.get("nameCn") or candidate.get("name") or "-",
             week_label or "未确定星期",
             "中文精确" if matched_stage == "chinese" else "TMDB 日文",
         )

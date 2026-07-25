@@ -99,7 +99,10 @@ def test_query_rule_uses_tmdb_japanese_after_chinese_miss(monkeypatch, caplog):
 
     assert metadata["bgmId"] == "638888"
     assert metadata["weekLabel"] == "星期五"
-    assert "描绘直至生命尽头 -> 星期五 (TMDB 日文)" in caplog.text
+    assert (
+        "描绘直至生命尽头 -> 画完这个再去死 | 星期五 | TMDB 日文"
+        in caplog.text
+    )
 
 
 def test_query_rule_rejects_non_exact_candidate(monkeypatch, caplog):
