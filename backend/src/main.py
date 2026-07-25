@@ -3,6 +3,7 @@ import os
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -28,6 +29,17 @@ uvicorn_logging_config = {
 
 def create_app() -> FastAPI:
     app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=(
+            r"^https?://(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|"
+            r"192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])"
+            r"(?:\.\d{1,3}){2}|[A-Za-z0-9-]+\.local):7789$"
+        ),
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
     # mount routers
     app.include_router(v1, prefix="/api")

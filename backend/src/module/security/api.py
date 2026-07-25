@@ -6,12 +6,16 @@ from module.models.user import User, UserUpdate
 
 from .jwt import verify_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 active_user = []
 
 
-async def get_current_user(token: str = Cookie(None)):
+async def get_current_user(
+    token: str | None = Cookie(None),
+    bearer_token: str | None = Depends(oauth2_scheme),
+):
+    token = bearer_token or token
     if not token:
         raise UNAUTHORIZED
     payload = verify_token(token)
