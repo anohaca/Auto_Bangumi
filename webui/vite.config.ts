@@ -42,13 +42,15 @@ export default defineConfig(({ mode }) => ({
       include: resolve(__dirname, './src/i18n/**'),
     }),
     VitePWA({
-      injectRegister: false,
+      injectRegister: 'auto',
       registerType: 'autoUpdate',
       devOptions: {
         enabled: true,
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        skipWaiting: true,
+        clientsClaim: true,
       },
       manifest: {
         name: 'AutoBangumi',
