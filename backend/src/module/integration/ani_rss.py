@@ -89,7 +89,7 @@ class AniRssMetadataCache:
         try:
             info = tmdb_parser(title, "jp", test=True)
         except Exception as exc:
-            logger.warning(
+            logger.debug(
                 "[ANI-RSS Match] rule=%s TMDB query=%r failed: %s",
                 rule.id,
                 title,
@@ -97,14 +97,14 @@ class AniRssMetadataCache:
             )
             return ""
         if info and info.original_title:
-            logger.info(
+            logger.debug(
                 "[ANI-RSS Match] rule=%s TMDB query=%r original=%r",
                 rule.id,
                 title,
                 info.original_title,
             )
             return info.original_title
-        logger.info(
+        logger.debug(
             "[ANI-RSS Match] rule=%s TMDB query=%r has no original title",
             rule.id,
             title,
@@ -123,7 +123,7 @@ class AniRssMetadataCache:
             for item in items
             if cls._exact_text(item.get(candidate_field)) == expected
         ]
-        logger.info(
+        logger.debug(
             "[ANI-RSS Match] rule=%s stage=%s query=%r candidates=%d exact=%d",
             rule.id,
             stage,
@@ -160,20 +160,7 @@ class AniRssMetadataCache:
                     matched_stage = "tmdb-japanese"
 
         if not candidate:
-            logger.warning(
-                "[ANI-RSS Match] rule=%s title=%r rejected: no exact Chinese or TMDB Japanese match",
-                rule.id,
-                rule.official_title,
-            )
             raise LookupError("not found")
-        logger.info(
-            "[ANI-RSS Match] rule=%s title=%r selected id=%s name=%r stage=%s",
-            rule.id,
-            rule.official_title,
-            candidate.get("id"),
-            candidate.get("nameCn") or candidate.get("name"),
-            matched_stage,
-        )
         detail = cls._post("getAniBySubjectId?id=" + quote(str(candidate["id"]))) or {}
         release_date = detail.get("releaseDate") or candidate.get("date") or ""
         week_label = detail.get("weekLabel") or ""
@@ -191,11 +178,10 @@ class AniRssMetadataCache:
                 "星期日",
             ][parsed.weekday()]
         logger.info(
-            "[ANI-RSS Match] rule=%s id=%s release=%s weekday=%s",
-            rule.id,
-            candidate.get("id"),
-            release_date or "-",
-            week_label or "unknown",
+            "[ANI-RSS Match] %s -> %s (%s)",
+            rule.official_title,
+            week_label or "未确定星期",
+            "中文精确" if matched_stage == "chinese" else "TMDB 日文",
         )
         return {
             **detail,
@@ -254,11 +240,6 @@ class AniRssMetadataCache:
                 async with semaphore:
                     try:
                         metadata = await asyncio.to_thread(cls._query_with_retry, rule)
-                        logger.info(
-                            "[ANI-RSS Cache] %s -> %s",
-                            rule.official_title,
-                            metadata.get("weekLabel") or "unknown",
-                        )
                     except Exception as exc:
                         metadata = {
                             "notFound": True,
@@ -266,7 +247,7 @@ class AniRssMetadataCache:
                             "cachedAt": int(time.time()),
                         }
                         logger.warning(
-                            "[ANI-RSS Cache] Cannot resolve %s: %s",
+                            "[ANI-RSS Match] %s -> 未匹配 (%s)",
                             rule.official_title,
                             exc,
                         )

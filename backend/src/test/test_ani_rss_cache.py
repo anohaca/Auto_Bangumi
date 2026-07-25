@@ -99,10 +99,7 @@ def test_query_rule_uses_tmdb_japanese_after_chinese_miss(monkeypatch, caplog):
 
     assert metadata["bgmId"] == "638888"
     assert metadata["weekLabel"] == "星期五"
-    assert "stage=chinese" in caplog.text
-    assert "exact=0" in caplog.text
-    assert "stage=tmdb-japanese" in caplog.text
-    assert "selected id=638888" in caplog.text
+    assert "描绘直至生命尽头 -> 星期五 (TMDB 日文)" in caplog.text
 
 
 def test_query_rule_rejects_non_exact_candidate(monkeypatch, caplog):
@@ -138,7 +135,7 @@ def test_query_rule_rejects_non_exact_candidate(monkeypatch, caplog):
         else:
             raise AssertionError("low-confidence candidate must be rejected")
 
-    assert "rejected" in caplog.text
+    assert "[ANI-RSS Match]" not in caplog.text
 
 
 def test_tmdb_fallback_only_uses_official_chinese_title(monkeypatch):
