@@ -1396,7 +1396,7 @@
       '.' +
       SOURCE_CLASS +
       '{grid-column:1/-1;font-weight:600}' +
-      '.ab-source-auto{color:#6d28d9!important;background:#ede9fe!important;border-color:#c4b5fd!important}' +
+      '.ab-source-auto{color:#a78bfa!important}' +
       '.ab-card-manage,.ab-manage-entry{color:#7c3aed!important;font-weight:700}' +
       '.ab-modal .el-button--primary{--el-button-bg-color:#7c3aed;--el-button-border-color:#7c3aed;--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
       '.ab-integration-toast{position:fixed;z-index:99999;top:22px;left:50%;transform:translate(-50%,-20px);opacity:0;padding:10px 16px;border-radius:6px;background:#67c23a;color:#fff;transition:.2s;pointer-events:none}' +
