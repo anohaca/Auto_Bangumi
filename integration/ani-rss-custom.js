@@ -869,16 +869,24 @@
     }
 
     try {
-      abRules = await abRequest('/api/v1/bangumi/get/all');
+      const cachedResult = await abRequest('/api/v1/integration/ani-rss');
+      const cachedItems = Array.isArray(cachedResult?.items)
+        ? cachedResult.items
+        : [];
+      abRules = cachedItems.map((entry) => entry.rule);
       let sort = Math.max(0, ...aniItems.map((item) => Number(item.sort || 0))) + 1;
       let unresolved = 0;
       const batchSize = 4;
-      for (let offset = 0; offset < abRules.length; offset += batchSize) {
-        const batch = abRules.slice(offset, offset + batchSize);
-        const resolvedRules = await mapConcurrent(batch, 2, async (rule) => {
+      for (let offset = 0; offset < cachedItems.length; offset += batchSize) {
+        const batch = cachedItems.slice(offset, offset + batchSize);
+        const resolvedRules = batch.map((entry) => {
+          const rule = entry.rule;
           const directMatch = aniItems.find((item) => sameTitle(item, rule));
-          if (directMatch) return { rule, metadata: null, directMatch };
-          return { rule, metadata: await queryMetadata(rule), directMatch: null };
+          return {
+            rule,
+            metadata: entry.metadata || {},
+            directMatch,
+          };
         });
         for (const resolved of resolvedRules) {
           const { rule, metadata } = resolved;
@@ -917,7 +925,7 @@
           }
         }
         data.total = aniItems.length;
-        if (onProgress && offset + batchSize < abRules.length) {
+        if (onProgress && offset + batchSize < cachedItems.length) {
           onProgress(structuredClone(data));
         }
       }

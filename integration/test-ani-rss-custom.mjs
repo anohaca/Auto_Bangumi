@@ -106,7 +106,30 @@ const run = async (withToken, metadataDelay = 0) => {
         headers: { 'Content-Type': 'application/json' },
       });
     if (url.pathname === '/api/listAni') return json(listResult());
-    if (url.pathname === '/api/v1/bangumi/get/all') return json(rules);
+    if (url.pathname === '/api/v1/integration/ani-rss') {
+      if (metadataDelay) {
+        await new Promise((resolve) => setTimeout(resolve, metadataDelay));
+      }
+      return json({
+        items: [
+          { rule: rules[0], metadata: {} },
+          {
+            rule: rules[1],
+            metadata: {
+              bgmId: '999',
+              bgmName: 'AB Unique',
+              title: 'AB Unique',
+              jpTitle: 'AB Unique',
+              releaseDate: '2026-07-23',
+              weekLabel: '\u661f\u671f\u56db',
+              season: 1,
+              image: 'https://example.test/unique.jpg',
+              score: 8.2,
+            },
+          },
+        ],
+      });
+    }
     if (url.pathname === '/api/searchBgm') {
       if (metadataDelay) {
         await new Promise((resolve) => setTimeout(resolve, metadataDelay));
@@ -210,7 +233,7 @@ const run = async (withToken, metadataDelay = 0) => {
   if (withToken) {
     const deadline = Date.now() + 3000;
     while (
-      !calls.some((call) => call.includes('/api/getAniBySubjectId')) &&
+      !calls.some((call) => call.includes('/api/v1/integration/ani-rss')) &&
       Date.now() < deadline
     ) {
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -265,11 +288,11 @@ assert.equal(
 );
 assert.equal(
   authenticated.calls.filter((call) => call.includes('/api/searchBgm')).length,
-  1
+  0
 );
 assert.equal(
   authenticated.calls.some((call) => call.includes('/api/getAniBySubjectId')),
-  true
+  false
 );
 
 const unauthenticated = await run(false);
@@ -280,7 +303,7 @@ assert.equal(untouched.length, 2);
 assert.equal(untouched.every((item) => item._abSource === 'ANI-RSS'), true);
 assert.equal(
   unauthenticated.calls.some((call) =>
-    call.includes('/api/v1/bangumi/get/all')
+    call.includes('/api/v1/integration/ani-rss')
   ),
   false
 );
