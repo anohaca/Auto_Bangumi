@@ -230,26 +230,23 @@ const run = async (withToken, metadataDelay = 0) => {
   const firstResponse = await window.fetch('/api/listAni', { method: 'POST' });
   const firstResult = await firstResponse.json();
   const firstElapsed = Date.now() - startedAt;
-  if (withToken) {
-    const deadline = Date.now() + 3000;
-    while (
-      !calls.some((call) => call.includes('/api/v1/integration/ani-rss')) &&
-      Date.now() < deadline
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    await new Promise((resolve) => setTimeout(resolve, metadataDelay + 10));
-    const mergedResponse = await window.fetch('/api/listAni', {
-      method: 'POST',
-    });
-    return {
-      result: await mergedResponse.json(),
-      firstResult,
-      firstElapsed,
-      calls,
-    };
+  const deadline = Date.now() + 3000;
+  while (
+    !calls.some((call) => call.includes('/api/v1/integration/ani-rss')) &&
+    Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  return { result: firstResult, firstResult, firstElapsed, calls };
+  await new Promise((resolve) => setTimeout(resolve, metadataDelay + 10));
+  const mergedResponse = await window.fetch('/api/listAni', {
+    method: 'POST',
+  });
+  return {
+    result: await mergedResponse.json(),
+    firstResult,
+    firstElapsed,
+    calls,
+  };
 };
 
 const authenticated = await run(true, 100);
@@ -299,13 +296,16 @@ const unauthenticated = await run(false);
 const untouched = unauthenticated.result.data.weekList.flatMap(
   (week) => week.items
 );
-assert.equal(untouched.length, 2);
-assert.equal(untouched.every((item) => item._abSource === 'ANI-RSS'), true);
+assert.equal(untouched.length, 3);
+assert.equal(
+  untouched.some((item) => item._abSource === 'AutoBangumi'),
+  true
+);
 assert.equal(
   unauthenticated.calls.some((call) =>
     call.includes('/api/v1/integration/ani-rss')
   ),
-  false
+  true
 );
 
 console.log('ANI-RSS AutoBangumi merge tests passed');

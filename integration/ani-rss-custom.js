@@ -397,7 +397,8 @@
   let mergeTimer = 0;
   let merging = false;
   let backgroundMerge = null;
-  let readyMergedData = null;
+  let backgroundSignature = "";
+  const mergedDataCache = new Map();
   const sourceRegistry = new Map();
   const nativeFetch = window.fetch.bind(window);
 
@@ -515,6 +516,12 @@
     if (!response.ok) throw new Error('http ' + response.status);
     const contentType = response.headers.get('content-type') || '';
     return contentType.includes('json') ? response.json() : response.text();
+  };
+
+  const abPublicRequest = async (path) => {
+    const response = await fetch(AB_ORIGIN + path);
+    if (!response.ok) throw new Error('http ' + response.status);
+    return response.json();
   };
 
   const aniRequest = async (path, body) => {
@@ -864,12 +871,8 @@
   const mergeListData = async (data, onProgress) => {
     if (!data?.weekList) return data;
     initializeNativeData(data);
-    if (!localStorage.getItem(TOKEN_KEY)) {
-      return data;
-    }
-
     try {
-      const cachedResult = await abRequest('/api/v1/integration/ani-rss');
+      const cachedResult = await abPublicRequest('/api/v1/integration/ani-rss');
       const cachedItems = Array.isArray(cachedResult?.items)
         ? cachedResult.items
         : [];
@@ -951,11 +954,18 @@
     return data;
   };
 
-  const startBackgroundMerge = (data) => {
-    if (merging || backgroundMerge || !localStorage.getItem(TOKEN_KEY)) return;
+  const startBackgroundMerge = (data, signature) => {
+    if (
+      merging ||
+      backgroundMerge ||
+      mergedDataCache.has(signature)
+    ) {
+      return;
+    }
     merging = true;
+    backgroundSignature = signature;
     const publish = (merged) => {
-      readyMergedData = merged;
+      mergedDataCache.set(signature, structuredClone(merged));
       reloadMergedList(0);
     };
     backgroundMerge = mergeListData(structuredClone(data), publish)
@@ -965,6 +975,7 @@
       .finally(() => {
         merging = false;
         backgroundMerge = null;
+        backgroundSignature = "";
       });
   };
 
@@ -982,12 +993,13 @@
     try {
       const result = await response.clone().json();
       if (result.code >= 200 && result.code < 300) {
-        if (readyMergedData) {
-          result.data = readyMergedData;
-          readyMergedData = null;
+        const signature =
+          method + ':' + String(options.body || input.body || '');
+        if (mergedDataCache.has(signature)) {
+          result.data = structuredClone(mergedDataCache.get(signature));
         } else {
           result.data = initializeNativeData(result.data);
-          startBackgroundMerge(result.data);
+          startBackgroundMerge(result.data, signature);
         }
         const headers = new Headers(response.headers);
         headers.delete('content-length');
