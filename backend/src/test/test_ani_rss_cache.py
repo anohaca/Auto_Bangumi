@@ -53,13 +53,11 @@ def test_rule_key_changes_when_matching_fields_change():
     assert AniRssMetadataCache._rule_key(rule) != original
 
 
-def test_query_rule_accepts_fuzzy_translated_title_and_logs_process(
-    monkeypatch, caplog
-):
+def test_query_rule_uses_tmdb_japanese_after_chinese_miss(monkeypatch, caplog):
     rule = SimpleNamespace(
         id=23,
-        official_title="虽然我是不完美恶女～雏宫蝶鼠替换传～",
-        title_raw="我是不才恶女",
+        official_title="描绘直至生命尽头",
+        title_raw="Kore Kaite Shine",
         rule_name="",
         season=1,
         year="2026",
@@ -67,32 +65,47 @@ def test_query_rule_accepts_fuzzy_translated_title_and_logs_process(
 
     def fake_post(path):
         if path.startswith("searchBgm"):
+            if "%E3%81%93%E3%82%8C%E6%8F%8F%E3%81%84%E3%81%A6%E6%AD%BB%E3%81%AD" in path:
+                return [
+                    {
+                        "id": "638888",
+                        "name": "これ描いて死ね",
+                        "nameCn": "画完这个再去死",
+                        "season": 1,
+                    }
+                ]
             return [
                 {
-                    "id": "545008",
-                    "name": "ふつつかな悪女ではございますが",
-                    "nameCn": "恶女不才，请多关照 ～雏宫蝶鼠换身传～",
+                    "id": "wrong",
+                    "name": "ハックルベリー・フィン物語",
+                    "nameCn": "哈克贝利·芬历险记",
                     "season": 1,
                 }
             ]
         return {
             "title": rule.official_title,
-            "releaseDate": "2026-07-12",
+            "releaseDate": "2026-07-10",
             "score": 6.8,
         }
 
     monkeypatch.setattr(AniRssMetadataCache, "_post", fake_post)
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_tmdb_original_title",
+        lambda _rule: "これ描いて死ね",
+    )
     with caplog.at_level("INFO"):
         metadata = AniRssMetadataCache._query_rule(rule)
 
-    assert metadata["bgmId"] == "545008"
-    assert metadata["weekLabel"] == "星期日"
-    assert "candidates=1" in caplog.text
-    assert "selected id=545008" in caplog.text
-    assert "weekday=星期日" in caplog.text
+    assert metadata["bgmId"] == "638888"
+    assert metadata["weekLabel"] == "星期五"
+    assert "stage=chinese" in caplog.text
+    assert "exact=0" in caplog.text
+    assert "stage=tmdb-japanese" in caplog.text
+    assert "selected id=638888" in caplog.text
 
 
-def test_query_rule_rejects_low_confidence_candidate(monkeypatch, caplog):
+def test_query_rule_rejects_non_exact_candidate(monkeypatch, caplog):
     rule = SimpleNamespace(
         id=44,
         official_title="提欧奥特曼",
@@ -114,6 +127,9 @@ def test_query_rule_rejects_low_confidence_candidate(monkeypatch, caplog):
             }
         ],
     )
+    monkeypatch.setattr(
+        AniRssMetadataCache, "_tmdb_original_title", lambda _rule: ""
+    )
     with caplog.at_level("INFO"):
         try:
             AniRssMetadataCache._query_rule(rule)
@@ -123,27 +139,3 @@ def test_query_rule_rejects_low_confidence_candidate(monkeypatch, caplog):
             raise AssertionError("low-confidence candidate must be rejected")
 
     assert "rejected" in caplog.text
-
-
-def test_score_prefers_second_season_marker():
-    rule = SimpleNamespace(
-        official_title="不愉快的妖怪庵",
-        title_raw="Fukigen na Mononokean",
-        rule_name="",
-        season=2,
-        year="2016",
-    )
-    first = {
-        "name": "不機嫌なモノノケ庵",
-        "nameCn": "忧郁的物怪庵",
-        "season": 1,
-    }
-    second = {
-        "name": "不機嫌なモノノケ庵 續",
-        "nameCn": "忧郁的物怪庵 续",
-        "season": 1,
-    }
-
-    assert AniRssMetadataCache._score(second, rule) > AniRssMetadataCache._score(
-        first, rule
-    )

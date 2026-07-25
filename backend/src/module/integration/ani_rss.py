@@ -1,5 +1,4 @@
 import asyncio
-from difflib import SequenceMatcher
 import json
 import logging
 import os
@@ -14,6 +13,7 @@ from urllib.parse import quote
 import requests
 
 from module.database import Database
+from module.parser.analyser import tmdb_parser
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,6 @@ class AniRssMetadataCache:
     refresh_lock = asyncio.Lock()
     success_ttl = 30 * 86400
     failure_ttl = 6 * 3600
-    minimum_match_score = 45
 
     @classmethod
     def _origin(cls) -> str:
@@ -78,114 +77,105 @@ class AniRssMetadataCache:
             raise RuntimeError(result.get("message") or "ANI-RSS request failed")
         return result.get("data")
 
+    @staticmethod
+    def _exact_text(value: Any) -> str:
+        return unicodedata.normalize("NFKC", str(value or "")).strip()
+
     @classmethod
-    def _score(cls, candidate: dict[str, Any], rule) -> int:
-        targets = {
-            cls._normalize(rule.official_title),
-            cls._normalize(rule.title_raw),
-            cls._normalize(rule.rule_name),
-        }
-        targets.discard("")
-        names = {
-            cls._normalize(candidate.get("name")),
-            cls._normalize(candidate.get("nameCn")),
-        }
-        names.discard("")
-        score = 100 if names & targets else 0
-        for name in names:
-            for target in targets:
-                if name in target or target in name:
-                    score = max(score, 70)
-                score = max(
-                    score,
-                    round(SequenceMatcher(None, name, target).ratio() * 100),
+    def _tmdb_original_title(cls, rule) -> str:
+        for title in (rule.official_title, rule.title_raw):
+            if not title:
+                continue
+            try:
+                info = tmdb_parser(title, "jp", test=True)
+            except Exception as exc:
+                logger.warning(
+                    "[ANI-RSS Match] rule=%s TMDB query=%r failed: %s",
+                    rule.id,
+                    title,
+                    exc,
                 )
-        if rule.year and str(candidate.get("date", "")).startswith(str(rule.year)):
-            score += 8
-        if rule.season and int(candidate.get("season") or 0) == int(rule.season):
-            score += 8
-        candidate_title = " ".join(
-            str(candidate.get(key) or "") for key in ("name", "nameCn")
+                continue
+            if info and info.original_title:
+                logger.info(
+                    "[ANI-RSS Match] rule=%s TMDB query=%r original=%r",
+                    rule.id,
+                    title,
+                    info.original_title,
+                )
+                return info.original_title
+            logger.info(
+                "[ANI-RSS Match] rule=%s TMDB query=%r has no original title",
+                rule.id,
+                title,
+            )
+        return ""
+
+    @classmethod
+    def _search_exact(
+        cls, rule, query: str, candidate_field: str, stage: str
+    ) -> dict[str, Any] | None:
+        items = cls._post("searchBgm?name=" + quote(query))
+        items = items if isinstance(items, list) else []
+        expected = cls._exact_text(query)
+        matches = [
+            item
+            for item in items
+            if cls._exact_text(item.get(candidate_field)) == expected
+        ]
+        logger.info(
+            "[ANI-RSS Match] rule=%s stage=%s query=%r candidates=%d exact=%d",
+            rule.id,
+            stage,
+            query,
+            len(items),
+            len(matches),
         )
-        if int(rule.season or 1) == 2 and re.search(
-            r"(?:续|續|続|第\s*二|第\s*2|season\s*2|2nd|(?:^|\W)ii(?:\W|$))",
-            unicodedata.normalize("NFKC", candidate_title),
-            re.IGNORECASE,
-        ):
-            score += 12
-        return score
+        return matches[0] if matches else None
 
     @classmethod
     def _query_rule(cls, rule) -> dict[str, Any]:
-        queries = list(
+        chinese_queries = list(
             dict.fromkeys(
                 value
                 for value in [rule.official_title, rule.title_raw, rule.rule_name]
-                if value
+                if value and re.search(r"[\u3400-\u9fff]", value)
             )
         )
         candidate = None
-        candidate_score = -1
-        for query in queries:
-            items = cls._post("searchBgm?name=" + quote(query))
-            items = items if isinstance(items, list) else []
-            query_best = None
-            query_best_score = -1
-            for item in items:
-                score = cls._score(item, rule)
-                if score > query_best_score:
-                    query_best = item
-                    query_best_score = score
-                if score > candidate_score:
-                    candidate = item
-                    candidate_score = score
-            logger.info(
-                "[ANI-RSS Match] rule=%s query=%r candidates=%d best=%r score=%d",
-                rule.id,
-                query,
-                len(items),
-                (query_best or {}).get("nameCn")
-                or (query_best or {}).get("name")
-                or "-",
-                query_best_score,
-            )
-            if candidate_score >= 100:
+        matched_stage = ""
+        for query in chinese_queries:
+            candidate = cls._search_exact(rule, query, "nameCn", "chinese")
+            if candidate:
+                matched_stage = "chinese"
                 break
-        if not candidate or candidate_score < cls.minimum_match_score:
+
+        if not candidate:
+            japanese_title = cls._tmdb_original_title(rule)
+            if japanese_title:
+                candidate = cls._search_exact(
+                    rule, japanese_title, "name", "tmdb-japanese"
+                )
+                if candidate:
+                    matched_stage = "tmdb-japanese"
+
+        if not candidate:
             logger.warning(
-                "[ANI-RSS Match] rule=%s title=%r rejected: best=%r score=%d",
+                "[ANI-RSS Match] rule=%s title=%r rejected: no exact Chinese or TMDB Japanese match",
                 rule.id,
                 rule.official_title,
-                (candidate or {}).get("nameCn")
-                or (candidate or {}).get("name")
-                or "-",
-                candidate_score,
             )
             raise LookupError("not found")
         logger.info(
-            "[ANI-RSS Match] rule=%s title=%r selected id=%s name=%r score=%d",
+            "[ANI-RSS Match] rule=%s title=%r selected id=%s name=%r stage=%s",
             rule.id,
             rule.official_title,
             candidate.get("id"),
             candidate.get("nameCn") or candidate.get("name"),
-            candidate_score,
+            matched_stage,
         )
         detail = cls._post("getAniBySubjectId?id=" + quote(str(candidate["id"]))) or {}
         release_date = detail.get("releaseDate") or candidate.get("date") or ""
-        if (
-            int(rule.season or 1) == 1
-            and rule.year
-            and release_date
-            and not str(release_date).startswith(str(rule.year))
-        ):
-            logger.warning(
-                "[ANI-RSS Match] rule=%s id=%s rejected: release year %s != %s",
-                rule.id,
-                candidate.get("id"),
-                str(release_date)[:4],
-                rule.year,
-            )
-            raise LookupError("release year mismatch")
         week_label = detail.get("weekLabel") or ""
         if not week_label and release_date:
             from datetime import date
