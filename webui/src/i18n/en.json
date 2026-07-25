@@ -114,6 +114,7 @@
     "url": "Url"
   },
   "sidebar": {
+    "ani_rss": "ANI-RSS",
     "calendar": "Calendar",
     "config": "Config",
     "downloader": "Downloader",

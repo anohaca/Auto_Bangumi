@@ -26,6 +26,7 @@ const { isMobile } = useBreakpointQuery();
 
 const show = ref(props.open);
 const toggle = () => (show.value = !show.value);
+const aniRssUrl = `${window.location.protocol}//${window.location.hostname}:7789`;
 
 const RSS = h(
   'span',
@@ -52,6 +53,13 @@ const items = [
     icon: RSS,
     label: () => t('sidebar.rss'),
     path: '/rss',
+  },
+  {
+    id: 4,
+    icon: RSS,
+    label: () => t('sidebar.ani_rss'),
+    path: aniRssUrl,
+    external: true,
   },
   {
     id: 5,
@@ -137,10 +145,14 @@ const mobileItems = computed(() => items);
           />
         </div>
 
-        <RouterLink
+        <Component
+          :is="i.external ? 'a' : 'RouterLink'"
           v-for="i in items"
           :key="i.id"
-          :to="i.path"
+          :to="i.external ? undefined : i.path"
+          :href="i.external ? i.path : undefined"
+          :target="i.external ? '_blank' : undefined"
+          :rel="i.external ? 'noopener noreferrer' : undefined"
           replace
           :title="i.label()"
           fx-cer
@@ -151,14 +163,16 @@ const mobileItems = computed(() => items);
           transition-colors
           hover="bg-[#F1F5FA] text-[#2A1C52]"
           :class="[
-            route.path === i.path && 'bg-[#F1F5FA] text-[#2A1C52]',
+            !i.external &&
+              route.path === i.path &&
+              'bg-[#F1F5FA] text-[#2A1C52]',
             i.hidden && 'hidden',
           ]"
         >
           <Component :is="i.icon" :size="24" />
 
           <div text-h2 whitespace-nowrap>{{ i.label() }}</div>
-        </RouterLink>
+        </Component>
 
         <Exit />
       </div>
@@ -166,10 +180,14 @@ const mobileItems = computed(() => items);
 
     <template #mobile>
       <div bg-white flex rounded-10 overflow-hidden>
-        <RouterLink
+        <Component
+          :is="i.external ? 'a' : 'RouterLink'"
           v-for="i in mobileItems"
           :key="i.id"
-          :to="i.path"
+          :to="i.external ? undefined : i.path"
+          :href="i.external ? i.path : undefined"
+          :target="i.external ? '_blank' : undefined"
+          :rel="i.external ? 'noopener noreferrer' : undefined"
           replace
           flex-1
           fx-cer
@@ -180,12 +198,12 @@ const mobileItems = computed(() => items);
           transition-colors
           rounded-10
           :class="[
-            route.path === i.path && 'bg-theme-row text-white',
+            !i.external && route.path === i.path && 'bg-theme-row text-white',
             i.hidden && 'hidden',
           ]"
         >
           <Component :is="i.icon" :size="24" />
-        </RouterLink>
+        </Component>
 
         <Exit />
       </div>
