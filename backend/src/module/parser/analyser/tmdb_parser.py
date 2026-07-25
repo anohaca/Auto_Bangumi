@@ -23,8 +23,11 @@ class TMDBInfo:
 LANGUAGE = {"zh": "zh-CN", "jp": "ja-JP", "en": "en-US"}
 
 
-def search_url(e):
-    return f"{TMDB_URL}/3/search/tv?api_key={TMDB_API}&page=1&query={e}&include_adult=false"
+def search_url(e, language="zh"):
+    return (
+        f"{TMDB_URL}/3/search/tv?api_key={TMDB_API}&page=1&query={e}"
+        f"&include_adult=false&language={LANGUAGE[language]}"
+    )
 
 
 def info_url(e, key):
@@ -58,17 +61,29 @@ def get_season(seasons: list) -> tuple[int, str]:
 
 def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
     with RequestContent() as req:
-        url = search_url(title)
+        url = search_url(title, language)
         contents = req.get_json(url).get("results")
         if contents.__len__() == 0:
-            url = search_url(title.replace(" ", ""))
+            url = search_url(title.replace(" ", ""), language)
             contents = req.get_json(url).get("results")
         # 判断动画
         if contents:
-            for content in contents:
-                id = content["id"]
-                if is_animation(id, language):
+            normalized_title = re.sub(r"\s+", "", title).casefold()
+            ordered_contents = sorted(
+                contents,
+                key=lambda content: re.sub(
+                    r"\s+", "", str(content.get("name") or "")
+                ).casefold()
+                != normalized_title,
+            )
+            selected = None
+            for content in ordered_contents:
+                if is_animation(content["id"], language):
+                    selected = content
                     break
+            if not selected:
+                return None
+            id = selected["id"]
             url_info = info_url(id, language)
             info_content = req.get_json(url_info)
             season = [
