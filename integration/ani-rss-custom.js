@@ -304,6 +304,13 @@
 
     const style = document.createElement('style');
     style.textContent =
+      ':root{--ab-brand:#7c3aed;--ab-brand-light:#ede9fe;--ab-brand-border:#c4b5fd}' +
+      '#' +
+      TAB_ID +
+      '.is-active{color:var(--ab-brand)!important}' +
+      '#' +
+      TAB_ID +
+      '.is-active::after{background-color:var(--ab-brand)!important}' +
       '#' +
       PANEL_ID +
       ' .ab-settings{display:grid;grid-template-columns:repeat(2,minmax(300px,1fr));gap:16px}' +
@@ -332,6 +339,9 @@
       '#' +
       PANEL_ID +
       ' .ab-login-button{justify-self:end}' +
+      '#' +
+      PANEL_ID +
+      ' .el-button--primary{--el-button-bg-color:var(--ab-brand);--el-button-border-color:var(--ab-brand);--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
       '@media(max-width:900px){#' +
       PANEL_ID +
       ' .ab-settings{grid-template-columns:1fr}}';
@@ -731,7 +741,10 @@
 
   const sourceTag = (source) => {
     const tag = document.createElement('span');
-    tag.className = 'el-tag el-tag--primary el-tag--small is-light ' + SOURCE_CLASS;
+    tag.className =
+      'el-tag el-tag--primary el-tag--small is-light ' +
+      SOURCE_CLASS +
+      (source.includes('AutoBangumi') ? ' ab-source-auto' : ' ab-source-ani');
     tag.textContent = source;
     tag.title = '\u6765\u6e90\uff1a' + source;
     return tag;
@@ -1383,7 +1396,9 @@
       '.' +
       SOURCE_CLASS +
       '{grid-column:1/-1;font-weight:600}' +
-      '.ab-card-manage,.ab-manage-entry{color:var(--el-color-primary)!important;font-weight:700}' +
+      '.ab-source-auto{color:#6d28d9!important;background:#ede9fe!important;border-color:#c4b5fd!important}' +
+      '.ab-card-manage,.ab-manage-entry{color:#7c3aed!important;font-weight:700}' +
+      '.ab-modal .el-button--primary{--el-button-bg-color:#7c3aed;--el-button-border-color:#7c3aed;--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
       '.ab-integration-toast{position:fixed;z-index:99999;top:22px;left:50%;transform:translate(-50%,-20px);opacity:0;padding:10px 16px;border-radius:6px;background:#67c23a;color:#fff;transition:.2s;pointer-events:none}' +
       '.ab-integration-toast.is-visible{opacity:1;transform:translate(-50%,0)}' +
       '.ab-integration-toast.is-error{background:#f56c6c}' +
