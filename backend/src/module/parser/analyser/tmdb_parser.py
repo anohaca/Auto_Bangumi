@@ -18,6 +18,7 @@ class TMDBInfo:
     last_season: int
     year: str
     poster_link: str = None
+    score: float = 0
 
 
 LANGUAGE = {"zh": "zh-CN", "jp": "ja-JP", "en": "en-US"}
@@ -32,6 +33,18 @@ def search_url(e, language="zh"):
 
 def info_url(e, key):
     return f"{TMDB_URL}/3/tv/{e}?api_key={TMDB_API}&language={LANGUAGE[key]}"
+
+
+def season_info_url(tv_id, season_number, language="zh"):
+    return (
+        f"{TMDB_URL}/3/tv/{tv_id}/season/{season_number}"
+        f"?api_key={TMDB_API}&language={LANGUAGE[language]}"
+    )
+
+
+def tmdb_season_parser(tv_id, season_number, language="zh") -> dict:
+    with RequestContent() as req:
+        return req.get_json(season_info_url(tv_id, season_number, language))
 
 
 def is_animation(tv_id, language) -> bool:
@@ -91,6 +104,7 @@ def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
                     "season": s.get("name"),
                     "season_number": s.get("season_number"),
                     "air_date": s.get("air_date"),
+                    "episode_count": s.get("episode_count"),
                     "poster_path": s.get("poster_path"),
                 }
                 for s in info_content.get("seasons")
@@ -117,6 +131,7 @@ def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
                 last_season,
                 str(year_number),
                 poster_link,
+                float(info_content.get("vote_average") or 0),
             )
         else:
             return None

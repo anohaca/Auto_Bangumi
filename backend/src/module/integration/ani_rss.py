@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from module.database import Database
-from module.parser.analyser import tmdb_parser
+from module.parser.analyser import tmdb_parser, tmdb_season_parser
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,18 @@ class AniRssMetadataCache:
         from datetime import date
 
         parsed = date.fromisoformat(str(release_date)[:10])
+        season_details = tmdb_season_parser(info.id, season_number, "zh") or {}
+        episodes = season_details.get("episodes") or []
+        today = date.today()
+        aired_episode_count = sum(
+            1
+            for episode in episodes
+            if episode.get("air_date")
+            and date.fromisoformat(str(episode["air_date"])[:10]) <= today
+        )
+        total_episode_count = int(
+            (season or {}).get("episode_count") or len(episodes) or 0
+        )
         week_label = [
             "星期一",
             "星期二",
@@ -103,7 +115,9 @@ class AniRssMetadataCache:
             "title": info.title,
             "jpTitle": info.original_title,
             "season": season_number,
-            "score": 0,
+            "score": round(float(getattr(info, "score", 0) or 0), 1),
+            "currentEpisodeNumber": aired_episode_count,
+            "totalEpisodeNumber": total_episode_count or None,
             "image": info.poster_link or "",
             "releaseDate": release_date,
             "weekLabel": week_label,
@@ -138,7 +152,21 @@ class AniRssMetadataCache:
                 key = cls._rule_key(rule)
                 entry = entries.get(key)
                 ttl = cls.failure_ttl if entry and entry.get("notFound") else cls.success_ttl
-                if force or not entry or now - int(entry.get("cachedAt", 0)) >= ttl:
+                missing_episode_metadata = (
+                    entry
+                    and not entry.get("notFound")
+                    and (
+                        "currentEpisodeNumber" not in entry
+                        or "totalEpisodeNumber" not in entry
+                        or "score" not in entry
+                    )
+                )
+                if (
+                    force
+                    or not entry
+                    or missing_episode_metadata
+                    or now - int(entry.get("cachedAt", 0)) >= ttl
+                ):
                     missing.append((rule, key))
 
             semaphore = asyncio.Semaphore(2)

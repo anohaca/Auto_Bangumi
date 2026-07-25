@@ -125,6 +125,8 @@ const run = async (withToken, metadataDelay = 0) => {
               season: 1,
               image: 'https://example.test/unique.jpg',
               score: 8.2,
+              currentEpisodeNumber: 4,
+              totalEpisodeNumber: 12,
             },
           },
         ],
@@ -278,6 +280,8 @@ assert.equal(unique._abSource, 'AutoBangumi');
 assert.equal(unique.id, 'autobangumi-102');
 assert.equal(unique.weekLabel, '\u661f\u671f\u56db');
 assert.equal(unique.score, 8.2);
+assert.equal(unique.currentEpisodeNumber, 4);
+assert.equal(unique.totalEpisodeNumber, 12);
 assert.equal(Array.isArray(unique.standbyRssList), true);
 assert.equal(
   weeks.find((week) => week.weekLabel === '\u661f\u671f\u56db').items[0].id,

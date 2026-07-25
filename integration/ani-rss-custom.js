@@ -818,8 +818,11 @@
       pinyin: title,
       pinyinInitials: title,
       enable: !rule.deleted,
-      currentEpisodeNumber: 0,
-      totalEpisodeNumber: null,
+      currentEpisodeNumber: Number(metadata.currentEpisodeNumber || 0),
+      totalEpisodeNumber:
+        metadata.totalEpisodeNumber == null
+          ? null
+          : Number(metadata.totalEpisodeNumber),
       themoviedbName: '',
       type: 'autobangumi',
       bgmUrl,
