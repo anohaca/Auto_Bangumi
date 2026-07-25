@@ -390,7 +390,7 @@
 (() => {
   const AB_ORIGIN = 'http://' + window.location.hostname + ':7893';
   const TOKEN_KEY = 'autobangumi_access_token';
-  const CACHE_KEY = 'autobangumi_ani_metadata_v2';
+  const CACHE_KEY = 'autobangumi_ani_metadata_v3';
   const SOURCE_CLASS = 'ab-source-tag';
   let abRules = [];
   let aniItems = [];
@@ -543,6 +543,23 @@
     return result.data;
   };
 
+  const aniRequestWithRetry = async (path, body) => {
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await aniRequest(path, body);
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, 700 * 2 ** attempt)
+          );
+        }
+      }
+    }
+    throw lastError;
+  };
+
   const notify = (message, error = false) => {
     let element = document.querySelector('.ab-integration-toast');
     if (!element) {
@@ -611,7 +628,7 @@
       let candidate = null;
       let candidateScore = -1;
       for (const query of queries) {
-        const candidates = await aniRequest(
+        const candidates = await aniRequestWithRetry(
           'searchBgm?name=' + encodeURIComponent(query)
         );
         for (const item of Array.isArray(candidates) ? candidates : []) {
@@ -626,7 +643,7 @@
       if (!candidate || candidateScore < 30) {
         throw new Error('not found');
       }
-      const detail = await aniRequest(
+      const detail = await aniRequestWithRetry(
         'getAniBySubjectId?id=' + encodeURIComponent(candidate.id)
       );
       const date = detail?.releaseDate || candidate.date || '';
@@ -855,7 +872,7 @@
       abRules = await abRequest('/api/v1/bangumi/get/all');
       let sort = Math.max(0, ...aniItems.map((item) => Number(item.sort || 0))) + 1;
       let unresolved = 0;
-      const resolvedRules = await mapConcurrent(abRules, 4, async (rule) => {
+      const resolvedRules = await mapConcurrent(abRules, 2, async (rule) => {
         const directMatch = aniItems.find((item) => sameTitle(item, rule));
         if (directMatch) return { rule, metadata: null, directMatch };
         return { rule, metadata: await queryMetadata(rule), directMatch: null };
