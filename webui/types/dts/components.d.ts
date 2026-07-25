@@ -38,6 +38,7 @@ declare module '@vue/runtime-core' {
     ConfigManage: typeof import('./../../src/components/setting/config-manage.vue')['default']
     ConfigNormal: typeof import('./../../src/components/setting/config-normal.vue')['default']
     ConfigNotification: typeof import('./../../src/components/setting/config-notification.vue')['default']
+    ConfigPanel: typeof import('./../../src/components/setting/config-panel.vue')['default']
     ConfigParser: typeof import('./../../src/components/setting/config-parser.vue')['default']
     ConfigProxy: typeof import('./../../src/components/setting/config-proxy.vue')['default']
     MediaQuery: typeof import('./../../src/components/media-query.vue')['default']

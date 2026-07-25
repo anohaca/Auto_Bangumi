@@ -11,17 +11,24 @@ const { start, pause, restart } = useProgramStore();
 const iframe = ref<HTMLIFrameElement>();
 const reloadKey = ref(0);
 const aniLoaded = ref(false);
+const activeView = ref<'ani-rss' | 'settings'>('ani-rss');
 const aniRssUrl = computed(
   () => `http://${window.location.hostname || '127.0.0.1'}:7789/`
 );
+
+const { getConfig } = useConfigStore();
 
 const quickLinks = [
   { label: 'AB 主页', path: '/bangumi' },
   { label: 'AB RSS', path: '/rss' },
   { label: '下载器', path: '/downloader' },
   { label: '日志', path: '/log' },
-  { label: '设置', path: '/config' },
 ];
+
+function showSettings() {
+  getConfig();
+  activeView.value = 'settings';
+}
 
 function reloadAniRss() {
   aniLoaded.value = false;
@@ -73,6 +80,34 @@ async function toggleFullscreen() {
         ></span>
         <span text-h3>ANI-RSS {{ aniLoaded ? '已连接' : '连接中' }}</span>
       </div>
+
+      <button
+        h-32
+        px-12
+        rounded-8
+        :class="
+          activeView === 'ani-rss'
+            ? 'bg-theme-row text-white'
+            : 'bg-[#F1F5FA]'
+        "
+        @click="activeView = 'ani-rss'"
+      >
+        ANI-RSS
+      </button>
+
+      <button
+        h-32
+        px-12
+        rounded-8
+        :class="
+          activeView === 'settings'
+            ? 'bg-theme-row text-white'
+            : 'bg-[#F1F5FA]'
+        "
+        @click="showSettings"
+      >
+        AutoBangumi 设置
+      </button>
 
       <RouterLink
         v-for="item in quickLinks"
@@ -168,6 +203,7 @@ async function toggleFullscreen() {
     </div>
 
     <iframe
+      v-show="activeView === 'ani-rss'"
       :key="reloadKey"
       ref="iframe"
       :src="aniRssUrl"
@@ -181,5 +217,17 @@ async function toggleFullscreen() {
       rounded-12
       @load="aniLoaded = true"
     ></iframe>
+
+    <div
+      v-if="activeView === 'settings'"
+      flex-grow
+      min-h-0
+      overflow-hidden
+      bg-white
+      rounded-12
+      p-16
+    >
+      <config-panel />
+    </div>
   </div>
 </template>
