@@ -139,3 +139,24 @@ def test_query_rule_rejects_non_exact_candidate(monkeypatch, caplog):
             raise AssertionError("low-confidence candidate must be rejected")
 
     assert "rejected" in caplog.text
+
+
+def test_tmdb_fallback_only_uses_official_chinese_title(monkeypatch):
+    rule = SimpleNamespace(
+        id=50,
+        official_title="千年血戰篇-禍進譚-",
+        title_raw="BLEACH 死神",
+    )
+    queried = []
+
+    def fake_tmdb(title, language, test):
+        queried.append(title)
+        return None
+
+    monkeypatch.setattr(
+        "module.integration.ani_rss.tmdb_parser",
+        fake_tmdb,
+    )
+
+    assert AniRssMetadataCache._tmdb_original_title(rule) == ""
+    assert queried == ["千年血戰篇-禍進譚-"]

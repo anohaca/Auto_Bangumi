@@ -83,32 +83,32 @@ class AniRssMetadataCache:
 
     @classmethod
     def _tmdb_original_title(cls, rule) -> str:
-        for title in (rule.official_title, rule.title_raw):
-            if not title:
-                continue
-            try:
-                info = tmdb_parser(title, "jp", test=True)
-            except Exception as exc:
-                logger.warning(
-                    "[ANI-RSS Match] rule=%s TMDB query=%r failed: %s",
-                    rule.id,
-                    title,
-                    exc,
-                )
-                continue
-            if info and info.original_title:
-                logger.info(
-                    "[ANI-RSS Match] rule=%s TMDB query=%r original=%r",
-                    rule.id,
-                    title,
-                    info.original_title,
-                )
-                return info.original_title
-            logger.info(
-                "[ANI-RSS Match] rule=%s TMDB query=%r has no original title",
+        title = rule.official_title
+        if not title:
+            return ""
+        try:
+            info = tmdb_parser(title, "jp", test=True)
+        except Exception as exc:
+            logger.warning(
+                "[ANI-RSS Match] rule=%s TMDB query=%r failed: %s",
                 rule.id,
                 title,
+                exc,
             )
+            return ""
+        if info and info.original_title:
+            logger.info(
+                "[ANI-RSS Match] rule=%s TMDB query=%r original=%r",
+                rule.id,
+                title,
+                info.original_title,
+            )
+            return info.original_title
+        logger.info(
+            "[ANI-RSS Match] rule=%s TMDB query=%r has no original title",
+            rule.id,
+            title,
+        )
         return ""
 
     @classmethod
