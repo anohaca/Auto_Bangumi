@@ -13,6 +13,10 @@ export interface AniRssMetadata {
   notFound?: boolean;
   error?: string;
   cachedAt?: number;
+  aniRssCheckedAt?: number;
+  aniRssError?: string;
+  aniRssMatchedBy?: '中文' | '日文';
+  aniRssMatchVersion?: number;
 }
 
 export interface AniRssItem {

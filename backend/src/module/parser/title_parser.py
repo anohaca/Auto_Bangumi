@@ -31,8 +31,18 @@ class TitleParser:
             logger.warning(f"Cannot parse {torrent_path} with error {e}")
 
     @staticmethod
-    def tmdb_parser(title: str, season: int, language: str):
-        tmdb_info = tmdb_parser(title, language)
+    def tmdb_parser(
+        title: str,
+        season: int,
+        language: str,
+        episode_number: int | None = None,
+    ):
+        tmdb_info = tmdb_parser(
+            title,
+            language,
+            season_number=season,
+            episode_number=episode_number,
+        )
         if tmdb_info:
             logger.debug(f"TMDB Matched, official title is {tmdb_info.title}")
             tmdb_season = tmdb_info.last_season if tmdb_info.last_season else season

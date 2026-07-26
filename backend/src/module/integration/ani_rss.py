@@ -1,12 +1,15 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import threading
 import time
 import unicodedata
 from pathlib import Path
 from typing import Any
+
+import requests
 
 from module.database import Database
 from module.parser.analyser import tmdb_parser, tmdb_season_parser
@@ -20,6 +23,8 @@ class AniRssMetadataCache:
     refresh_lock = asyncio.Lock()
     success_ttl = 30 * 86400
     failure_ttl = 6 * 3600
+    ani_rss_timeout = 8
+    ani_rss_match_version = 2
 
     @staticmethod
     def _normalize(value: Any) -> str:
@@ -40,6 +45,118 @@ class AniRssMetadataCache:
                 str(rule.year or ""),
             ]
         )
+
+    @classmethod
+    def _ani_rss_origin(cls) -> str:
+        return os.getenv("ANI_RSS_ORIGIN", "http://192.168.64.1:7789").rstrip("/")
+
+    @classmethod
+    def _ani_rss_post(cls, path: str) -> Any:
+        error = None
+        for attempt in range(2):
+            try:
+                with requests.Session() as session:
+                    session.trust_env = False
+                    response = session.post(
+                        f"{cls._ani_rss_origin()}/api/{path}",
+                        timeout=cls.ani_rss_timeout,
+                    )
+                response.raise_for_status()
+                payload = response.json()
+                if not 200 <= int(payload.get("code") or 0) < 300:
+                    raise LookupError(
+                        payload.get("message") or "ANI-RSS request failed"
+                    )
+                return payload.get("data")
+            except (requests.RequestException, ValueError) as exc:
+                error = exc
+                if attempt == 0:
+                    time.sleep(0.7)
+        raise error
+
+    @classmethod
+    def _exact_candidate(
+        cls, candidates: Any, field: str, expected: str, season: int
+    ) -> dict | None:
+        exact = [
+            candidate
+            for candidate in (candidates if isinstance(candidates, list) else [])
+            if str(candidate.get(field) or "") == expected
+        ]
+        if not exact:
+            return None
+        return next(
+            (
+                candidate
+                for candidate in exact
+                if int(candidate.get("season") or 1) == season
+            ),
+            exact[0],
+        )
+
+    @classmethod
+    def _query_ani_rss(cls, rule, jp_title: str = "") -> dict[str, Any]:
+        season = int(rule.season or 1)
+        chinese_title = str(rule.official_title or "")
+        candidates = cls._ani_rss_post(
+            f"searchBgm?name={requests.utils.quote(chinese_title)}"
+        )
+        selected = cls._exact_candidate(
+            candidates, "nameCn", chinese_title, season
+        )
+        matched_by = "中文"
+
+        if selected is None and jp_title:
+            candidates = cls._ani_rss_post(
+                f"searchBgm?name={requests.utils.quote(jp_title)}"
+            )
+            selected = cls._exact_candidate(candidates, "name", jp_title, season)
+            matched_by = "日文"
+
+        if selected is None:
+            raise LookupError("ANI-RSS not found")
+
+        detail = cls._ani_rss_post(
+            f"getAniBySubjectId?id={requests.utils.quote(str(selected['id']))}"
+        ) or {}
+        return {
+            "bgmId": int(selected["id"]),
+            "bgmName": selected.get("name") or "",
+            "score": float(detail.get("score") or 0),
+            "currentEpisodeNumber": int(detail.get("currentEpisodeNumber") or 0),
+            "totalEpisodeNumber": int(detail.get("totalEpisodeNumber") or 0),
+            "matchedBy": matched_by,
+        }
+
+    @classmethod
+    def _verify_with_ani_rss(
+        cls, metadata: dict[str, Any], rule
+    ) -> dict[str, Any]:
+        total = int(metadata.get("totalEpisodeNumber") or 0)
+        score = float(metadata.get("score") or 0)
+        if total >= 12 and score > 0:
+            return metadata
+
+        verified = cls._query_ani_rss(rule, str(metadata.get("jpTitle") or ""))
+        metadata["bgmId"] = verified["bgmId"]
+        metadata["bgmName"] = verified["bgmName"]
+        metadata["aniRssMatchedBy"] = verified["matchedBy"]
+        if score <= 0 and verified["score"] > 0:
+            metadata["score"] = round(verified["score"], 1)
+        if total < 12 and verified["totalEpisodeNumber"] > 0:
+            metadata["totalEpisodeNumber"] = verified["totalEpisodeNumber"]
+        metadata["aniRssCheckedAt"] = int(time.time())
+        metadata["aniRssMatchVersion"] = cls.ani_rss_match_version
+        logger.info(
+            "[Calendar] ANI-RSS verified by %s: %s | episodes %s -> %s | score %s -> %s",
+            verified["matchedBy"],
+            rule.official_title,
+            total or "未知",
+            metadata.get("totalEpisodeNumber") or "未知",
+            score or "无",
+            metadata.get("score") or "无",
+        )
+        return metadata
 
     @classmethod
     def _load(cls) -> dict[str, Any]:
@@ -110,7 +227,7 @@ class AniRssMetadataCache:
             week_label or "未确定星期",
             f"TMDB S{season_number} {release_date}",
         )
-        return {
+        metadata = {
             "tmdbId": str(info.id),
             "title": info.title,
             "jpTitle": info.original_title,
@@ -123,6 +240,19 @@ class AniRssMetadataCache:
             "weekLabel": week_label,
             "cachedAt": int(time.time()),
         }
+        if total_episode_count < 12 or not metadata["score"]:
+            try:
+                metadata = cls._verify_with_ani_rss(metadata, rule)
+            except Exception as exc:
+                metadata["aniRssCheckedAt"] = int(time.time())
+                metadata["aniRssMatchVersion"] = cls.ani_rss_match_version
+                metadata["aniRssError"] = str(exc)
+                logger.warning(
+                    "[Calendar] ANI-RSS verification failed: %s (%s)",
+                    rule.official_title,
+                    exc,
+                )
+        return metadata
 
     @classmethod
     def _query_with_retry(cls, rule) -> dict[str, Any]:
@@ -161,10 +291,22 @@ class AniRssMetadataCache:
                         or "score" not in entry
                     )
                 )
+                needs_ani_verification = (
+                    entry
+                    and not entry.get("notFound")
+                    and (
+                        int(entry.get("totalEpisodeNumber") or 0) < 12
+                        or not float(entry.get("score") or 0)
+                        or "aniRssCheckedAt" in entry
+                    )
+                    and entry.get("aniRssMatchVersion")
+                    != cls.ani_rss_match_version
+                )
                 if (
                     force
                     or not entry
                     or missing_episode_metadata
+                    or needs_ani_verification
                     or now - int(entry.get("cachedAt", 0)) >= ttl
                 ):
                     missing.append((rule, key))

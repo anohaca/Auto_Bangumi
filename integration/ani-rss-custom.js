@@ -2,7 +2,7 @@
   const TAB_ID = 'autobangumi-native-settings-tab';
   const PANEL_ID = 'autobangumi-native-settings-panel';
   const TOKEN_KEY = 'autobangumi_access_token';
-  const AB_ORIGIN = 'http://' + window.location.hostname + ':7893';
+  const AB_ORIGIN = 'http://' + window.location.hostname + ':7892';
   let currentConfig = null;
 
   const t = {
@@ -40,7 +40,7 @@
     loginTitle: '\u8bf7\u5148\u767b\u5f55 AutoBangumi',
     login: '\u767b\u5f55\u5e76\u8bfb\u53d6\u8bbe\u7f6e',
     loginFailed: '\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u8d26\u53f7\u5bc6\u7801',
-    offline: '\u65e0\u6cd5\u8fde\u63a5 AutoBangumi\uff0c\u8bf7\u786e\u8ba4 7893 \u7aef\u53e3\u53ef\u7528',
+    offline: '\u65e0\u6cd5\u8fde\u63a5 AutoBangumi\uff0c\u8bf7\u786e\u8ba4 7892 \u7aef\u53e3\u53ef\u7528',
   };
 
   const groups = [
@@ -178,15 +178,111 @@
         '</select></label>'
       );
     }
+    if (type === 'list') {
+      return (
+        '<label class="ab-settings-list-field"><span>' +
+        label +
+        '</span><div class="ab-settings-exclude" data-ab-path="' +
+        path +
+        '"></div></label>'
+      );
+    }
     return (
       '<label><span>' +
       label +
       '</span><input data-ab-path="' +
       path +
       '" type="' +
-      (type === 'list' ? 'text' : type) +
+      type +
       '"></label>'
     );
+  };
+
+  const openSettingsExcludeAdder = (onAdd) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'el-overlay ab-settings-exclude-overlay';
+    overlay.innerHTML =
+      '<div class="el-overlay-dialog"><div class="el-dialog">' +
+      '<header class="el-dialog__header"><span class="el-dialog__title">' +
+      '\u6dfb\u52a0\u6b63\u5219</span></header>' +
+      '<div class="el-dialog__body"><label class="ab-settings-regex-row">' +
+      '<span>\u6b63\u5219</span><div class="el-input"><div class="el-input__wrapper">' +
+      '<input class="el-input__inner" placeholder="\u5982 720\u3001\u7b80\u3001\\\\d-\\\\d">' +
+      '</div></div></label></div><footer class="el-dialog__footer">' +
+      '<button class="el-button ab-regex-cancel">\u53d6\u6d88</button>' +
+      '<button class="el-button el-button--primary ab-regex-add">\u6dfb\u52a0</button>' +
+      '</footer></div></div>';
+    const close = () => overlay.remove();
+    const input = overlay.querySelector('input');
+    const submit = () => {
+      const pattern = input.value.trim();
+      if (!pattern) return;
+      onAdd(pattern);
+      close();
+    };
+    overlay.querySelector('.ab-regex-cancel').addEventListener('click', close);
+    overlay.querySelector('.ab-regex-add').addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') submit();
+    });
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close();
+    });
+    document.body.appendChild(overlay);
+    input.focus();
+  };
+
+  const renderSettingsExclude = (editor, values) => {
+    const items = values;
+    editor.textContent = '';
+    items.forEach((item, index) => {
+      const tag = document.createElement('span');
+      tag.className =
+        'el-tag el-tag--primary el-tag--small is-light is-closable ab-settings-exclude-tag';
+      const content = document.createElement('span');
+      content.className = 'el-tag__content';
+      content.textContent = item;
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'ab-settings-exclude-close';
+      close.textContent = '\u00d7';
+      close.addEventListener('click', () => {
+        items.splice(index, 1);
+        renderSettingsExclude(editor, items);
+      });
+      tag.append(content, close);
+      editor.appendChild(tag);
+    });
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className =
+      'el-button is-text is-has-bg el-button--small ab-settings-exclude-add';
+    add.textContent = '+';
+    add.title = '\u6dfb\u52a0\u6b63\u5219';
+    add.addEventListener('click', () => {
+      openSettingsExcludeAdder((pattern) => {
+        if (!items.includes(pattern)) items.push(pattern);
+        renderSettingsExclude(editor, items);
+      });
+    });
+    editor.appendChild(add);
+    if (items.length) {
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className =
+        'el-button is-text is-has-bg el-button--small el-button--danger ab-settings-exclude-clear';
+      clear.title = '\u6e05\u7a7a\u6392\u9664';
+      clear.setAttribute('aria-label', '\u6e05\u7a7a\u6392\u9664');
+      clear.innerHTML =
+        '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+        '<path fill="currentColor" d="M352 192V96h320v96h224v64H128v-64h224zm64 0h192v-32H416v32zm-192 128h576l-48 608H272l-48-608zm192 128v352h64V448h-64zm128 0v352h64V448h-64z"/></svg></i></span>';
+      clear.addEventListener('click', () => {
+        items.splice(0);
+        renderSettingsExclude(editor, items);
+      });
+      editor.appendChild(clear);
+    }
+    editor._abItems = items;
   };
 
   const fillForm = (config) => {
@@ -195,7 +291,12 @@
       const input = field(path);
       const value = getValue(config, path);
       if (type === 'checkbox') input.checked = Boolean(value);
-      else if (type === 'list') input.value = (value || []).join(', ');
+      else if (type === 'list') {
+        renderSettingsExclude(
+          input,
+          (value || []).map((item) => String(item).trim()).filter(Boolean)
+        );
+      }
       else input.value = value ?? '';
     });
     panel().querySelector('.ab-login').style.display = 'none';
@@ -246,10 +347,7 @@
       if (type === 'checkbox') value = input.checked;
       if (type === 'number') value = Number(value);
       if (type === 'list') {
-        value = value
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean);
+        value = [...(input._abItems || [])];
       }
       setValue(config, path, value);
     });
@@ -338,6 +436,34 @@
       ' .ab-check{justify-content:flex-start}' +
       '#' +
       PANEL_ID +
+      ' .ab-settings-list-field{align-items:flex-start}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-settings-exclude{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:6px;width:190px;min-height:32px}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-settings-exclude-tag{max-width:160px}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-settings-exclude-tag .el-tag__content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-settings-exclude-close{margin-left:5px;padding:0;border:0;background:transparent;color:inherit;font-size:15px;cursor:pointer}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-settings-exclude-add,#' +
+      PANEL_ID +
+      ' .ab-settings-exclude-clear{width:24px;height:24px;min-width:24px;padding:2px}' +
+      '.ab-settings-exclude-overlay{z-index:2200;display:flex;align-items:center;justify-content:center}' +
+      '.ab-settings-exclude-overlay .el-overlay-dialog{position:static;width:300px}' +
+      '.ab-settings-exclude-overlay .el-dialog{width:100%;margin:0}' +
+      '.ab-settings-exclude-overlay .el-dialog__header{padding:20px 20px 10px}' +
+      '.ab-settings-exclude-overlay .el-dialog__body{padding:20px}' +
+      '.ab-settings-exclude-overlay .el-dialog__footer{padding:10px 20px 20px}' +
+      '.ab-settings-regex-row{display:flex;align-items:center;gap:12px}' +
+      '.ab-settings-regex-row>span{flex:0 0 42px}' +
+      '#' +
+      PANEL_ID +
       ' .ab-login-button{justify-self:end}' +
       '#' +
       PANEL_ID +
@@ -370,8 +496,19 @@
     tab.id = TAB_ID;
     tab.className = 'el-tabs__item is-top';
     tab.setAttribute('role', 'tab');
-    tab.textContent = 'AutoBangumi';
-    nav.appendChild(tab);
+    tab.textContent = 'AB';
+    const donationTab = Array.from(
+      nav.querySelectorAll('.el-tabs__item')
+    ).find((item) =>
+      /(?:\u6350\u8d60|\u8d5e\u52a9|donat)/i.test(
+        item.textContent.trim()
+      )
+    );
+    if (donationTab?.parentElement === nav) {
+      nav.insertBefore(tab, donationTab);
+    } else {
+      nav.appendChild(tab);
+    }
     const nativePanel = createPanel(tabs);
 
     tab.addEventListener('click', () => {
@@ -390,7 +527,17 @@
     });
   };
 
-  new MutationObserver(install).observe(document.body, {
+  let installScheduled = false;
+  const scheduleInstall = () => {
+    if (installScheduled) return;
+    installScheduled = true;
+    window.requestAnimationFrame(() => {
+      installScheduled = false;
+      install();
+    });
+  };
+
+  new MutationObserver(scheduleInstall).observe(document.body, {
     childList: true,
     subtree: true,
   });
@@ -398,9 +545,12 @@
 })();
 
 (() => {
-  const AB_ORIGIN = 'http://' + window.location.hostname + ':7893';
+  const AB_ORIGIN = 'http://' + window.location.hostname + ':7892';
   const TOKEN_KEY = 'autobangumi_access_token';
   const CACHE_KEY = 'autobangumi_ani_metadata_v3';
+  const MINI_MODE_KEY = 'autobangumi_ani_mini_mode';
+  const EMPTY_POSTER =
+    'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
   const SOURCE_CLASS = 'ab-source-tag';
   let abRules = [];
   let aniItems = [];
@@ -408,6 +558,8 @@
   let merging = false;
   let backgroundMerge = null;
   let backgroundSignature = "";
+  let abMetadataPromise = null;
+  let abMetadataFetchedAt = 0;
   const mergedDataCache = new Map();
   const sourceRegistry = new Map();
   const nativeFetch = window.fetch.bind(window);
@@ -416,15 +568,11 @@
     ani: 'ANI-RSS',
     ab: 'AutoBangumi',
     both: 'ANI-RSS + AutoBangumi',
-    manage: 'AutoBangumi \u7ba1\u7406',
     add: 'AutoBangumi \u6dfb\u52a0\u8ba2\u9605',
     login: '\u8bf7\u5148\u5728\u8bbe\u7f6e\u4e2d\u767b\u5f55 AutoBangumi',
     loading: '\u6b63\u5728\u5408\u5e76 AutoBangumi \u756a\u5267...',
-    noRules: '\u6682\u65e0 AutoBangumi \u756a\u5267',
     close: '\u5173\u95ed',
     edit: '\u7f16\u8f91',
-    enable: '\u542f\u7528',
-    disable: '\u7981\u7528',
     delete: '\u5220\u9664',
     save: '\u4fdd\u5b58',
     cancel: '\u53d6\u6d88',
@@ -433,14 +581,10 @@
     season: '\u5b63',
     group: '\u5b57\u5e55\u7ec4',
     offset: '\u504f\u79fb',
-    filter: '\u8fc7\u6ee4\uff08\u9017\u53f7\u5206\u9694\uff09',
+    filter: '\u6392\u9664',
     rss: 'RSS \u94fe\u63a5\uff08\u9017\u53f7\u5206\u9694\uff09',
     savePath: '\u4fdd\u5b58\u8def\u5f84',
-    status: '\u72b6\u6001',
     source: '\u6765\u6e90',
-    actions: '\u64cd\u4f5c',
-    enabled: '\u5df2\u542f\u7528',
-    disabled: '\u5df2\u7981\u7528',
     confirmDelete: '\u786e\u5b9a\u5220\u9664\u8fd9\u6761 AutoBangumi \u89c4\u5219\uff1f',
     rssUrl: 'RSS \u94fe\u63a5',
     rssName: 'RSS \u540d\u79f0',
@@ -468,13 +612,12 @@
         ''
       );
 
-  const escapeHtml = (value) =>
-    String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  const cleanCommaList = (value) =>
+    String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(',');
 
   const aliases = (item, isAni) => {
     const values = isAni
@@ -515,9 +658,8 @@
 
   const abRequest = async (path, options = {}) => {
     const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) throw new Error('unauthorized');
     const headers = new Headers(options.headers || {});
-    headers.set('Authorization', 'Bearer ' + token);
+    if (token) headers.set('Authorization', 'Bearer ' + token);
     const response = await fetch(AB_ORIGIN + path, { ...options, headers });
     if (response.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
@@ -532,6 +674,20 @@
     const response = await fetch(AB_ORIGIN + path);
     if (!response.ok) throw new Error('http ' + response.status);
     return response.json();
+  };
+
+  const getAbMetadata = (force = false) => {
+    const fresh = Date.now() - abMetadataFetchedAt < 30000;
+    if (!force && abMetadataPromise && fresh) return abMetadataPromise;
+    abMetadataFetchedAt = Date.now();
+    abMetadataPromise = abPublicRequest('/api/v1/integration/ani-rss').catch(
+      (error) => {
+        abMetadataPromise = null;
+        abMetadataFetchedAt = 0;
+        throw error;
+      }
+    );
+    return abMetadataPromise;
   };
 
   const aniRequest = async (path, body) => {
@@ -753,8 +909,16 @@
   const addSourceToAniCard = (card, source, rule) => {
     const tags = card.querySelector('.list-card-tags');
     if (!tags) return;
-    card.querySelector('.' + SOURCE_CLASS)?.remove();
-    tags.appendChild(sourceTag(source));
+    let tag = card.querySelector('.' + SOURCE_CLASS);
+    if (!tag) {
+      tag = sourceTag(source);
+      tags.appendChild(tag);
+    } else if (tag.textContent !== source) {
+      tag.classList.toggle('ab-source-auto', source.includes('AutoBangumi'));
+      tag.classList.toggle('ab-source-ani', !source.includes('AutoBangumi'));
+      tag.textContent = source;
+      tag.title = '\u6765\u6e90\uff1a' + source;
+    }
     if (rule) {
       card.dataset.abRuleId = rule.id;
       addManageAction(card, rule);
@@ -773,20 +937,88 @@
     return element;
   };
 
+  const nativeCardButton = (template, className, title, action) => {
+    const element = template.cloneNode(true);
+    element.classList.add('ab-card-action', className);
+    element.title = title;
+    element.setAttribute('aria-label', title);
+    element.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        action();
+      },
+      true
+    );
+    return element;
+  };
+
+  const nativeCardSpacer = (template) => {
+    const spacer = template
+      ? template.cloneNode(false)
+      : document.createElement('div');
+    spacer.classList.add('list-card-spacer', 'ab-card-action-spacer');
+    spacer.style.height = '5px';
+    return spacer;
+  };
+
+  const deleteRule = async (rule) => {
+    if (!window.confirm(text.confirmDelete)) return;
+    try {
+      await abRequest('/api/v1/bangumi/delete/' + rule.id + '?file=false', {
+        method: 'DELETE',
+      });
+      notify(text.success);
+      reloadMergedList(100);
+    } catch (error) {
+      notify(text.failed + ': ' + error.message, true);
+    }
+  };
+
   const addManageAction = (card, rule) => {
     const actions = card.querySelector('.list-card-actions');
-    if (!actions || actions.querySelector('.ab-card-manage')) return;
+    if (!actions || actions.querySelector('.ab-card-edit')) return;
+    const nativeButtons = Array.from(actions.querySelectorAll('button'));
+    if (nativeButtons.length < 2) return;
+    const editTemplate = nativeButtons[nativeButtons.length - 2];
+    const deleteTemplate = nativeButtons[nativeButtons.length - 1];
+    const spacerTemplate = actions.querySelector('.list-card-spacer');
+    const editButton = nativeCardButton(
+      editTemplate,
+      'ab-card-edit',
+      text.edit + ' AutoBangumi',
+      () => openRuleEditor(rule)
+    );
+    const deleteButton = nativeCardButton(
+      deleteTemplate,
+      'ab-card-delete',
+      text.delete + ' AutoBangumi',
+      () => deleteRule(rule)
+    );
     if (card.dataset.abOnly === 'true') {
       actions.textContent = '';
     }
-    const manageButton = button('AB', 'ab-card-manage', () => openRuleEditor(rule));
-    manageButton.title = text.manage;
-    actions.prepend(manageButton);
+    if (card.dataset.abOnly === 'true') {
+      actions.append(
+        editButton,
+        nativeCardSpacer(spacerTemplate),
+        deleteButton
+      );
+      return;
+    }
+    actions.prepend(
+      editButton,
+      nativeCardSpacer(spacerTemplate),
+      deleteButton,
+      nativeCardSpacer(spacerTemplate)
+    );
   };
 
   const syntheticAni = (rule, metadata, sort) => {
     const title = rule.official_title || metadata.title || rule.title_raw;
     const releaseDate = String(metadata.releaseDate || '').slice(0, 10);
+    const poster = posterUrl(rule, metadata) || EMPTY_POSTER;
     const bgmUrl = metadata.bgmId
       ? 'https://bgm.tv/subject/' + metadata.bgmId
       : '';
@@ -794,7 +1026,7 @@
       sort,
       id: 'autobangumi-' + rule.id,
       mikanTitle: '',
-      url: String(rule.rss_link || '').split(',')[0] || '',
+      url: cleanCommaList(rule.rss_link).split(',')[0] || '',
       exists: true,
       standbyRssList: [],
       title,
@@ -806,8 +1038,8 @@
       date: 0,
       weekLabel: metadata.weekLabel || '\u672a\u77e5\u661f\u671f',
       season: Number(rule.season || metadata.season || 1),
-      cover: '',
-      image: metadata.image || '',
+      cover: poster,
+      image: poster,
       subgroup: rule.group_name || '',
       match: [],
       exclude: String(rule.filter || '')
@@ -859,6 +1091,22 @@
   const sourceKey = (title, season) =>
     normalizeTitle(title) + '|' + Number(season || 1);
 
+  const hasAllEpisodes = (metadata) => {
+    const current = Number(metadata?.currentEpisodeNumber || 0);
+    const total = Number(metadata?.totalEpisodeNumber || 0);
+    return current > 0 && total > 0 && current >= total;
+  };
+
+  const removeNativeMatch = (data, rule, metadata) => {
+    for (const week of data.weekList) {
+      week.items = (week.items || []).filter(
+        (item) =>
+          !sameTitle(item, rule) && !sameTitle(item, rule, metadata)
+      );
+    }
+    aniItems = data.weekList.flatMap((week) => week.items || []);
+  };
+
   const registerSource = (item, source, rule = null, metadata = null) => {
     for (const alias of aliases(item, true)) {
       sourceRegistry.set(sourceKey(alias, item.season), {
@@ -888,7 +1136,7 @@
     if (!data?.weekList) return data;
     initializeNativeData(data);
     try {
-      const cachedResult = await abPublicRequest('/api/v1/integration/ani-rss');
+      const cachedResult = await getAbMetadata();
       const cachedItems = Array.isArray(cachedResult?.items)
         ? cachedResult.items
         : [];
@@ -909,6 +1157,10 @@
         });
         for (const resolved of resolvedRules) {
           const { rule, metadata } = resolved;
+          if (hasAllEpisodes(metadata)) {
+            removeNativeMatch(data, rule, metadata);
+            continue;
+          }
           const match =
             resolved.directMatch ||
             aniItems.find((item) => sameTitle(item, rule, metadata));
@@ -982,9 +1234,9 @@
     backgroundSignature = signature;
     const publish = (merged) => {
       mergedDataCache.set(signature, structuredClone(merged));
-      reloadMergedList(0);
+      reloadMergedList(0, true);
     };
-    backgroundMerge = mergeListData(structuredClone(data), publish)
+    backgroundMerge = mergeListData(structuredClone(data))
       .then((merged) => {
         publish(merged);
       })
@@ -1034,18 +1286,36 @@
   };
 
   const decorateCards = () => {
-    document.querySelectorAll('.' + SOURCE_CLASS).forEach((element) => element.remove());
-    document.querySelectorAll('.ab-card-manage').forEach((element) => element.remove());
     document.querySelectorAll('.grid-container .el-card').forEach((card) => {
       delete card.dataset.abRuleId;
       delete card.dataset.abOnly;
+      const cardImage = card.querySelector('.list-card-image');
+      if (cardImage?.complete && cardImage.naturalWidth > 0) {
+        cardImage.classList.add('ab-image-ready');
+      }
+      card
+        .querySelector('.list-card-title')
+        ?.classList.remove('ab-title-ani', 'ab-title-auto', 'ab-title-both');
       const title = card.querySelector('.list-card-title')?.textContent;
       const seasonText =
         card.querySelector('.list-card-tags .el-tag')?.textContent || '';
       const season = Number(seasonText.match(/\d+/)?.[0] || 1);
       const key = sourceKey(title, season);
       const source = sourceRegistry.get(key);
-      if (!source) return;
+      if (!source) {
+        card.querySelector('.' + SOURCE_CLASS)?.remove();
+        return;
+      }
+      const titleElement = card.querySelector('.list-card-title');
+      if (titleElement) {
+        titleElement.classList.add(
+          source.source === text.ab
+            ? 'ab-title-auto'
+            : source.source === text.both
+              ? 'ab-title-both'
+              : 'ab-title-ani'
+        );
+      }
       if (source.abOnly) {
         card.dataset.abOnly = 'true';
         const image = card.querySelector('.list-card-image');
@@ -1081,14 +1351,23 @@
     });
   };
 
-  const reloadMergedList = (delay = 100) => {
+  const reloadMergedList = (delay = 100, silent = false) => {
     window.setTimeout(() => {
+      if (silent) {
+        document.body.classList.add('ab-silent-list-refresh');
+        window.setTimeout(
+          () => document.body.classList.remove('ab-silent-list-refresh'),
+          1500
+        );
+      }
       if (typeof window.$reLoadList === 'function') window.$reLoadList();
-      window.setTimeout(decorateCards, 700);
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(decorateCards)
+      );
     }, delay);
   };
 
-  const scheduleMerge = (delay = 300) => {
+  const scheduleMerge = (delay = 100) => {
     window.clearTimeout(mergeTimer);
     mergeTimer = window.setTimeout(decorateCards, delay);
   };
@@ -1104,7 +1383,9 @@
       title +
       '</span><button class="el-dialog__headerbtn" aria-label="' +
       text.close +
-      '">\u00d7</button></header><div class="el-dialog__body"></div></div></div>';
+      '"><i class="el-icon el-dialog__close"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+      '<path fill="currentColor" d="M764.288 214.592 512 466.88 259.712 214.592a32 32 0 1 0-45.248 45.248L466.752 512 214.464 764.288a32 32 0 1 0 45.248 45.248L512 557.248l252.288 252.288a32 32 0 1 0 45.248-45.248L557.248 512l252.288-252.288a32 32 0 1 0-45.248-45.248z"/></svg></i>' +
+      '</button></header><div class="el-dialog__body"></div></div></div>';
     overlay.querySelector('.el-dialog__body').appendChild(body);
     const close = () => overlay.remove();
     overlay.querySelector('.el-dialog__headerbtn').addEventListener('click', close);
@@ -1117,18 +1398,160 @@
 
   const formRow = (label, name, value, type = 'text') => {
     const row = document.createElement('label');
-    row.className = 'ab-form-row';
+    row.className = 'el-form-item ab-form-row';
     row.innerHTML =
-      '<span>' +
+      '<span class="el-form-item__label">' +
       label +
-      '</span><input name="' +
+      '</span><div class="el-form-item__content"><div class="el-input">' +
+      '<div class="el-input__wrapper"><input class="el-input__inner" name="' +
       name +
       '" type="' +
       type +
-      '">';
+      '"></div></div></div>';
     const input = row.querySelector('input');
     if (type === 'checkbox') input.checked = Boolean(value);
     else input.value = value ?? '';
+    return row;
+  };
+
+  const numberRow = (label, name, value, min = null) => {
+    const row = document.createElement('label');
+    row.className = 'el-form-item ab-form-row';
+    row.innerHTML =
+      '<span class="el-form-item__label">' +
+      label +
+      '</span><div class="el-form-item__content">' +
+      '<div class="el-input-number ab-number-input">' +
+      '<button type="button" class="el-input-number__decrease">\u2212</button>' +
+      '<button type="button" class="el-input-number__increase">+</button>' +
+      '<div class="el-input"><div class="el-input__wrapper">' +
+      '<input class="el-input__inner" name="' +
+      name +
+      '" type="number"></div></div></div></div>';
+    const input = row.querySelector('input');
+    input.value = Number(value || 0);
+    if (min != null) input.min = String(min);
+    const update = (delta) => {
+      const next = Number(input.value || 0) + delta;
+      input.value = min == null ? next : Math.max(min, next);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    row
+      .querySelector('.el-input-number__decrease')
+      .addEventListener('click', () => update(-1));
+    row
+      .querySelector('.el-input-number__increase')
+      .addEventListener('click', () => update(1));
+    return row;
+  };
+
+  const rssGroupRow = (groupName, rssLink) => {
+    const row = document.createElement('div');
+    row.className = 'el-form-item ab-form-row ab-rss-group-row';
+    row.innerHTML =
+      '<span class="el-form-item__label">' +
+      '\u4e3b RSS' +
+      '</span>' +
+      '<div class="el-form-item__content"><div class="ab-rss-group-content">' +
+      '<div class="ab-rss-group-field"><span class="ab-inline-label">' +
+      text.group +
+      '</span><div class="el-input"><div class="el-input__wrapper">' +
+      '<input class="el-input__inner" name="group_name" type="text">' +
+      '</div></div></div>' +
+      '<div class="ab-rss-url-field"><span class="ab-inline-label">RSS</span>' +
+      '<div class="el-textarea"><textarea class="el-textarea__inner" ' +
+      'name="rss_link" rows="2"></textarea></div></div>' +
+      '</div></div>';
+    row.querySelector('[name="group_name"]').value = groupName ?? '';
+    row.querySelector('[name="rss_link"]').value = cleanCommaList(rssLink);
+    row.querySelector('[name="group_name"]').placeholder =
+      '\u672a\u77e5\u5b57\u5e55\u7ec4';
+    row.querySelector('[name="rss_link"]').placeholder = 'https://';
+    return row;
+  };
+
+  const filterRow = (value) => {
+    const row = document.createElement('div');
+    row.className = 'el-form-item ab-form-row';
+    row.innerHTML =
+      '<span class="el-form-item__label">' +
+      text.filter +
+      '</span><div class="el-form-item__content">' +
+      '<div class="ab-exclude-editor"></div></div>';
+    const editor = row.querySelector('.ab-exclude-editor');
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'filter';
+    const items = String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const render = () => {
+      editor.textContent = '';
+      hidden.value = items.join(',');
+      if (!items.length) {
+        const empty = document.createElement('span');
+        empty.className = 'el-tag el-tag--info el-tag--small is-light ab-exclude-tag';
+        empty.textContent = '\u65e0';
+        editor.appendChild(empty);
+      }
+      items.forEach((item, index) => {
+        const tag = document.createElement('span');
+        tag.className =
+          'el-tag el-tag--primary el-tag--small is-light is-closable ab-exclude-tag';
+        const label = document.createElement('span');
+        label.className = 'el-tag__content';
+        label.textContent = item;
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'ab-exclude-close';
+        close.textContent = '\u00d7';
+        close.setAttribute('aria-label', '\u5220\u9664 ' + item);
+        close.addEventListener('click', () => {
+          items.splice(index, 1);
+          render();
+        });
+        tag.append(label, close);
+        editor.appendChild(tag);
+      });
+      const add = button('+', 'ab-exclude-add is-has-bg', () => {
+        const inputRow = formRow('\u6b63\u5219', 'pattern', '');
+        inputRow.querySelector('input').placeholder =
+          '\u5982 720\u3001\u7b80\u3001\\\\d-\\\\d';
+        const actions = document.createElement('div');
+        actions.className = 'el-dialog__footer ab-modal-actions';
+        const instance = modal('\u6dfb\u52a0\u6b63\u5219', inputRow);
+        const cancel = button(text.cancel, '', instance.close);
+        const submit = button('\u6dfb\u52a0', 'el-button--primary', () => {
+          const pattern = inputRow.querySelector('input').value.trim();
+          if (!pattern) return;
+          if (!items.includes(pattern)) items.push(pattern);
+          instance.close();
+          render();
+        });
+        cancel.classList.remove('is-text');
+        submit.classList.remove('is-text');
+        actions.append(cancel, submit);
+        inputRow.appendChild(actions);
+      });
+      add.title = '\u6dfb\u52a0\u6b63\u5219';
+      editor.appendChild(add);
+      if (items.length) {
+        const clear = button('', 'el-button--danger ab-exclude-clear is-has-bg', () => {
+          items.splice(0);
+          render();
+        });
+        clear.title = '\u6e05\u7a7a\u6392\u9664';
+        clear.setAttribute('aria-label', '\u6e05\u7a7a\u6392\u9664');
+        clear.innerHTML =
+          '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+          '<path fill="currentColor" d="M352 192V96h320v96h224v64H128v-64h224zm64 0h192v-32H416v32zm-192 128h576l-48 608H272l-48-608zm192 128v352h64V448h-64zm128 0v352h64V448h-64z"/></svg></i></span>';
+        editor.appendChild(clear);
+      }
+      editor.appendChild(hidden);
+    };
+    render();
     return row;
   };
 
@@ -1144,20 +1567,34 @@
       [text.filter, 'filter', rule.filter],
       [text.rss, 'rss_link', rule.rss_link],
       [text.savePath, 'save_path', rule.save_path],
-    ].forEach((args) => content.appendChild(formRow(...args)));
+    ].forEach((args) => {
+      let row;
+      if (args[1] === 'filter') row = filterRow(args[2]);
+      else if (args[1] === 'season') {
+        row = numberRow(args[0], args[1], args[2], 0);
+      } else if (args[1] === 'offset') {
+        row = numberRow(args[0], args[1], args[2]);
+      } else if (args[1] === 'group_name') {
+        row = rssGroupRow(rule.group_name, rule.rss_link);
+      } else if (args[1] === 'rss_link') {
+        return;
+      } else {
+        row = formRow(...args);
+      }
+      content.appendChild(row);
+    });
     const actions = document.createElement('div');
-    actions.className = 'ab-modal-actions';
-    const instance = modal(text.edit + ' AutoBangumi', content);
-    actions.appendChild(
-      button(text.cancel, '', () => instance.close())
-    );
-    actions.appendChild(
-      button(text.save, 'el-button--primary', async () => {
+    actions.className = 'el-dialog__footer ab-modal-actions';
+    const instance = modal('\u4fee\u6539\u8ba2\u9605', content);
+    const cancelButton = button(text.cancel, '', () => instance.close());
+    cancelButton.classList.remove('is-text');
+    const saveButton = button('\u786e\u5b9a', 'el-button--primary', async () => {
         const updated = { ...rule };
-        content.querySelectorAll('input').forEach((input) => {
+        content.querySelectorAll('[name]').forEach((input) => {
           updated[input.name] =
             input.type === 'number' ? Number(input.value) : input.value;
         });
+        updated.rss_link = cleanCommaList(updated.rss_link);
         const payload = { ...updated };
         delete payload.id;
         try {
@@ -1172,86 +1609,10 @@
         } catch (error) {
           notify(text.failed + ': ' + error.message, true);
         }
-      })
-    );
-    content.appendChild(actions);
-  };
-
-  const openManage = async () => {
-    const content = document.createElement('div');
-    content.innerHTML = '<div class="ab-manage-loading">' + text.loading + '</div>';
-    const instance = modal(text.manage, content);
-    try {
-      abRules = await abRequest('/api/v1/bangumi/get/all');
-      content.textContent = '';
-      const table = document.createElement('table');
-      table.className = 'ab-manage-table';
-      table.innerHTML =
-        '<thead><tr><th>' +
-        text.title +
-        '</th><th>' +
-        text.season +
-        '</th><th>' +
-        text.status +
-        '</th><th>' +
-        text.actions +
-        '</th></tr></thead><tbody></tbody>';
-      const tbody = table.querySelector('tbody');
-      abRules.forEach((rule) => {
-        const row = document.createElement('tr');
-        row.innerHTML =
-          '<td>' +
-          escapeHtml(rule.official_title || rule.title_raw) +
-          '</td><td>' +
-          (rule.season || 1) +
-          '</td><td>' +
-          (rule.deleted ? text.disabled : text.enabled) +
-          '</td><td class="ab-row-actions"></td>';
-        const rowActions = row.querySelector('.ab-row-actions');
-        rowActions.appendChild(button(text.edit, '', () => openRuleEditor(rule)));
-        rowActions.appendChild(
-          button(rule.deleted ? text.enable : text.disable, '', async () => {
-            try {
-              if (rule.deleted) {
-                await abRequest('/api/v1/bangumi/enable/' + rule.id);
-              } else {
-                await abRequest(
-                  '/api/v1/bangumi/disable/' + rule.id + '?file=false',
-                  { method: 'DELETE' }
-                );
-              }
-              instance.close();
-              notify(text.success);
-              reloadMergedList(100);
-            } catch (error) {
-              notify(text.failed + ': ' + error.message, true);
-            }
-          })
-        );
-        rowActions.appendChild(
-          button(text.delete, 'el-button--danger', async () => {
-            if (!window.confirm(text.confirmDelete)) return;
-            try {
-              await abRequest(
-                '/api/v1/bangumi/delete/' + rule.id + '?file=false',
-                { method: 'DELETE' }
-              );
-              row.remove();
-              notify(text.success);
-              reloadMergedList(100);
-            } catch (error) {
-              notify(text.failed + ': ' + error.message, true);
-            }
-          })
-        );
-        tbody.appendChild(row);
       });
-      if (!abRules.length) content.textContent = text.noRules;
-      else content.appendChild(table);
-    } catch (error) {
-      content.textContent =
-        error.message === 'unauthorized' ? text.login : text.failed;
-    }
+    saveButton.classList.remove('is-text');
+    actions.append(cancelButton, saveButton);
+    content.appendChild(actions);
   };
 
   const openAdd = () => {
@@ -1356,20 +1717,6 @@
     content.appendChild(actions);
   };
 
-  const installToolbar = () => {
-    const toolbar = document.querySelector('.add-button');
-    if (!toolbar || toolbar.querySelector('.ab-manage-entry')) return;
-    const wrapper = document.createElement('div');
-    wrapper.style.margin = '0 4px';
-    const manageButton = button('AB \u7ba1\u7406', 'ab-manage-entry', openManage);
-    manageButton.title = text.manage;
-    wrapper.appendChild(manageButton);
-    const manageOriginal = Array.from(toolbar.querySelectorAll('button')).find(
-      (item) => item.textContent.trim() === '\u7ba1\u7406'
-    );
-    toolbar.insertBefore(wrapper, manageOriginal?.parentElement || null);
-  };
-
   const installAddMenu = () => {
     document.querySelectorAll('.el-dropdown-menu').forEach((menu) => {
       if (
@@ -1391,6 +1738,50 @@
     });
   };
 
+  const applyMiniMode = (enabled) => {
+    document.body.classList.toggle('ab-mini-list', enabled);
+    localStorage.setItem(MINI_MODE_KEY, enabled ? 'true' : 'false');
+    const toggle = document.querySelector('.ab-mini-list-toggle');
+    if (toggle) {
+      const label = enabled
+        ? '\u6062\u590d\u5361\u7247\u6a21\u5f0f'
+        : '\u4ec5\u663e\u793a\u6d77\u62a5\u548c\u6807\u9898';
+      toggle.title = label;
+      toggle.setAttribute('aria-label', label);
+      toggle.innerHTML = enabled
+        ? '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true"><path fill="currentColor" d="M128 160h768v704H128V160zm64 64v576h640V224H192zm64 96h256v224H256V320zm320 0h192v64H576v-64zm0 112h192v64H576v-64zm-320 176h512v64H256v-64z"/></svg></i></span>'
+        : '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true"><path fill="currentColor" d="M128 128h320v320H128V128zm448 0h320v320H576V128zM128 576h320v320H128V576zm448 0h320v320H576V576zM192 192v192h192V192H192zm448 0v192h192V192H640zM192 640v192h192V640H192zm448 0v192h192V640H640z"/></svg></i></span>';
+    }
+  };
+
+  const installMiniToggle = () => {
+    const toolbar = document.querySelector('.add-button');
+    if (!toolbar || toolbar.querySelector('.ab-mini-list-toggle')) return;
+    const template = toolbar.querySelector('button');
+    if (!template) return;
+    const wrapper =
+      template.parentElement && template.parentElement !== toolbar
+        ? template.parentElement.cloneNode(false)
+        : document.createElement('div');
+    wrapper.removeAttribute('id');
+    wrapper.classList.add('ab-mini-list-toggle-wrapper');
+    const toggle = template.cloneNode(true);
+    toggle.removeAttribute('id');
+    toggle.classList.add('ab-mini-list-toggle');
+    toggle.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        applyMiniMode(!document.body.classList.contains('ab-mini-list'));
+      },
+      true
+    );
+    wrapper.appendChild(toggle);
+    toolbar.prepend(wrapper);
+    applyMiniMode(localStorage.getItem(MINI_MODE_KEY) === 'true');
+  };
+
   const installStyles = () => {
     if (document.getElementById('autobangumi-integration-styles')) return;
     const style = document.createElement('style');
@@ -1400,30 +1791,91 @@
       SOURCE_CLASS +
       '{grid-column:1/-1;font-weight:600}' +
       '.ab-source-auto{color:#a78bfa!important}' +
-      '.ab-card-manage,.ab-manage-entry{color:#7c3aed!important;font-weight:700}' +
+      '.ab-title-ani{color:#409eff!important}' +
+      '.ab-title-auto{color:#a78bfa!important}' +
+      '.ab-title-both{color:#e6a23c!important}' +
+      '.ab-card-action{color:#7c3aed!important}' +
+      '.ab-card-action .el-icon{font-size:16px}' +
+      '.ab-card-delete{color:var(--el-color-danger)!important}' +
+      '.ab-mini-list-toggle{color:#7c3aed!important}' +
+      '.ab-mini-list .grid-container{grid-template-columns:repeat(auto-fill,minmax(108px,1fr))!important;gap:10px!important}' +
+      '.ab-mini-list .grid-container .el-card .el-card__body{padding:8px!important}' +
+      '.ab-mini-list .list-card-content{display:flex!important;flex-direction:column!important;align-items:stretch!important}' +
+      '.ab-mini-list .list-card-image-container{width:100%!important}' +
+      '.ab-mini-list .list-card-image{display:block!important;width:100%!important;height:auto!important;aspect-ratio:2/3!important;object-fit:cover!important}' +
+      '.list-card-image:not(.ab-image-ready){visibility:hidden!important}' +
+      '.ab-mini-list .list-card-info{position:static!important;min-width:0!important}' +
+      '.ab-mini-list .list-card-info-inner{margin:6px 0 0!important}' +
+      '.ab-mini-list .list-card-info-inner>*:not(.flex){display:none!important}' +
+      '.ab-mini-list .list-card-info-inner>.flex{display:block!important}' +
+      '.ab-mini-list .list-card-title{display:block!important;width:100%!important;text-align:center!important;font-size:13px!important;line-height:1.4!important}' +
+      '.ab-mini-list .list-card-actions{display:none!important}' +
+      '.ab-silent-list-refresh .el-loading-mask{display:none!important}' +
       '.ab-modal .el-button--primary{--el-button-bg-color:#7c3aed;--el-button-border-color:#7c3aed;--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
       '.ab-integration-toast{position:fixed;z-index:99999;top:22px;left:50%;transform:translate(-50%,-20px);opacity:0;padding:10px 16px;border-radius:6px;background:#67c23a;color:#fff;transition:.2s;pointer-events:none}' +
       '.ab-integration-toast.is-visible{opacity:1;transform:translate(-50%,0)}' +
       '.ab-integration-toast.is-error{background:#f56c6c}' +
       '.ab-modal-overlay{z-index:2100;display:flex;align-items:center;justify-content:center}' +
-      '.ab-modal-overlay .el-overlay-dialog{position:static;width:min(900px,92vw)}' +
-      '.ab-modal{width:100%;margin:0;max-height:86vh;overflow:auto;background:var(--el-bg-color);border-radius:8px}' +
-      '.ab-modal .el-dialog__header{display:flex;align-items:center;justify-content:space-between;padding:18px}' +
-      '.ab-modal .el-dialog__headerbtn{position:static;width:32px;height:32px;border:0;background:transparent;color:var(--el-text-color-regular);font-size:24px;cursor:pointer}' +
-      '.ab-modal .el-dialog__body{padding:0 18px 18px}' +
-      '.ab-form-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:10px 0}' +
-      '.ab-form-row input:not([type=checkbox]),.ab-form-row select{width:min(480px,60vw);height:34px;padding:0 9px;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-fill-color-blank);color:var(--el-text-color-primary);box-sizing:border-box}' +
-      '.ab-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}' +
-      '.ab-manage-table{width:100%;border-collapse:collapse}' +
-      '.ab-manage-table th,.ab-manage-table td{padding:9px;border-bottom:1px solid var(--el-border-color-lighter);text-align:left}' +
-      '.ab-row-actions{white-space:nowrap}' +
+      '.ab-modal-overlay .el-overlay-dialog{position:static;width:min(620px,calc(100vw - 32px))}' +
+      '.ab-modal{width:100%;margin:0;max-height:86vh;overflow:auto;background:var(--el-bg-color);border-radius:var(--el-border-radius-small)}' +
+      '.ab-modal .el-dialog__header{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 10px;margin:0}' +
+      '.ab-modal .el-dialog__headerbtn{position:static;width:32px;height:32px;border:0;background:transparent;color:var(--el-color-info);cursor:pointer}' +
+      '.ab-modal .el-dialog__headerbtn .el-icon{font-size:16px}' +
+      '.ab-modal .el-dialog__body{padding:20px}' +
+      '.ab-rule-editor{padding:0 8px}' +
+      '.ab-form-row{display:flex;align-items:flex-start;margin:0 0 18px}' +
+      '.ab-form-row .el-form-item__label{width:104px;flex:0 0 104px;padding-right:16px;justify-content:flex-end;line-height:32px;box-sizing:border-box}' +
+      '.ab-form-row .el-form-item__content{flex:1;min-width:0}' +
+      '.ab-form-row .el-input{width:100%}' +
+      '.ab-number-input{width:150px}' +
+      '.ab-number-input .el-input__inner{text-align:center}' +
+      '.ab-number-input .el-input-number__decrease,.ab-number-input .el-input-number__increase{display:flex;align-items:center;justify-content:center}' +
+      '.ab-form-row .el-textarea{width:100%}' +
+      '.ab-form-row .el-textarea__inner{min-height:54px;resize:vertical}' +
+      '.ab-rss-group-content{display:flex;align-items:flex-start;gap:10px;width:100%;min-width:0}' +
+      '.ab-rss-group-field{width:120px;flex:0 0 120px}' +
+      '.ab-rss-url-field{flex:1;min-width:0}' +
+      '.ab-inline-label{display:block;margin-bottom:6px;color:var(--el-text-color-regular);font-size:13px;line-height:20px}' +
+      '.ab-rss-group-row .ab-inline-label{display:none}' +
+      '.ab-rss-group-row .el-textarea__inner{min-height:32px;height:32px;resize:none;white-space:nowrap;overflow:hidden}' +
+      '.ab-form-row select{width:100%;height:32px;padding:0 11px;border:1px solid var(--el-border-color);border-radius:var(--el-border-radius-base);background:var(--el-fill-color-blank);color:var(--el-text-color-primary);box-sizing:border-box}' +
+      '.ab-exclude-editor{display:flex;align-items:center;flex-wrap:wrap;gap:8px;width:100%;min-height:32px}' +
+      '.ab-exclude-tag{max-width:220px}' +
+      '.ab-exclude-tag .el-tag__content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.ab-exclude-close{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;padding:0;border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer}' +
+      '.ab-exclude-add,.ab-exclude-clear{height:24px;min-width:24px;padding:2px 8px}' +
+      '.ab-modal-actions{display:flex;justify-content:flex-end;gap:12px;padding:10px 0 0;margin-top:2px}' +
+      '@media (max-width:520px){' +
+      '.ab-modal-overlay .el-overlay-dialog{width:calc(100vw - 32px)}' +
+      '.ab-modal .el-dialog__header{padding:18px 18px 8px}' +
+      '.ab-modal .el-dialog__body{padding:18px 14px 20px}' +
+      '.ab-rule-editor{padding:0}' +
+      '.ab-form-row{margin-bottom:16px}' +
+      '.ab-form-row .el-form-item__label{width:92px;flex-basis:92px;padding-right:12px;font-size:15px}' +
+      '.ab-rss-group-content{gap:8px}' +
+      '.ab-rss-group-field{width:86px;flex-basis:86px}' +
+      '.ab-inline-label{font-size:12px}' +
+      '.ab-number-input{width:150px}' +
+      '.ab-exclude-editor{gap:6px}' +
+      '.ab-exclude-tag{max-width:180px}' +
+      '}' +
       '.ab-subscribe-preview{margin-top:14px;padding-top:8px;border-top:1px solid var(--el-border-color)}';
     document.head.appendChild(style);
   };
 
+  let uiInstallScheduled = false;
+  const scheduleUiInstall = () => {
+    if (uiInstallScheduled) return;
+    uiInstallScheduled = true;
+    window.requestAnimationFrame(() => {
+      uiInstallScheduled = false;
+      installMiniToggle();
+      installAddMenu();
+    });
+  };
+
   const observer = new MutationObserver((records) => {
-    installToolbar();
-    installAddMenu();
+    scheduleUiInstall();
     const listChanged = records.some((record) =>
       Array.from(record.addedNodes).some((node) => {
         if (!(node instanceof HTMLElement)) return false;
@@ -1440,16 +1892,46 @@
         );
       })
     );
-    if (listChanged) scheduleMerge(500);
+    if (listChanged) scheduleMerge(80);
   });
 
   installStyles();
-  installToolbar();
+  installMiniToggle();
   installAddMenu();
-  observer.observe(document.body, { childList: true, subtree: true });
-  window.addEventListener('autobangumi:authenticated', () =>
-    reloadMergedList(50)
+  document.addEventListener?.(
+    'load',
+    (event) => {
+      const image = event.target;
+      if (
+        image instanceof HTMLImageElement &&
+        image.classList.contains('list-card-image')
+      ) {
+        image.classList.add('ab-image-ready');
+      }
+    },
+    true
   );
-  window.addEventListener('focus', () => scheduleMerge(300));
-  scheduleMerge(800);
+  document.addEventListener?.(
+    'error',
+    (event) => {
+      const image = event.target;
+      if (
+        image instanceof HTMLImageElement &&
+        image.classList.contains('list-card-image') &&
+        image.src !== EMPTY_POSTER
+      ) {
+        image.classList.remove('ab-image-ready');
+        image.src = EMPTY_POSTER;
+      }
+    },
+    true
+  );
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('autobangumi:authenticated', () => {
+    getAbMetadata(true).catch(() => {});
+    reloadMergedList(50);
+  });
+  window.addEventListener('focus', () => scheduleMerge(100));
+  getAbMetadata().catch(() => {});
+  scheduleMerge(100);
 })();

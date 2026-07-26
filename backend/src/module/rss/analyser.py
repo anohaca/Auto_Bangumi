@@ -5,6 +5,7 @@ from module.conf import settings
 from module.models import Bangumi, ResponseModel, RSSItem, Torrent
 from module.network import RequestContent
 from module.parser import TitleParser
+from module.parser.analyser.raw_parser import raw_parser as parse_episode
 
 from .engine import RSSEngine
 
@@ -22,13 +23,24 @@ class RSSAnalyser(TitleParser):
                 logger.warning("[Parser] Mikan torrent has no homepage info.")
                 pass
         elif rss.parser == "tmdb":
+            parsed_episode = parse_episode(torrent.name)
+            old_title = bangumi.official_title
             tmdb_title, season, year, poster_link = self.tmdb_parser(
-                bangumi.official_title, bangumi.season, settings.rss_parser.language
+                bangumi.official_title,
+                bangumi.season,
+                settings.rss_parser.language,
+                parsed_episode.episode,
             )
             bangumi.official_title = tmdb_title
             bangumi.year = year
             bangumi.season = season
             bangumi.poster_link = poster_link
+            logger.info(
+                "[Parser] %s E%s -> %s",
+                old_title,
+                parsed_episode.episode,
+                tmdb_title,
+            )
         else:
             pass
         bangumi.official_title = re.sub(r"[/:.\\]", " ", bangumi.official_title)
@@ -99,4 +111,3 @@ class RSSAnalyser(TitleParser):
             msg_en="Cannot parse this link.",
             msg_zh="无法解析此链接。",
         )
-

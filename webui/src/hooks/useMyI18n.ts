@@ -13,8 +13,8 @@ type Languages = keyof typeof messages;
 
 export const useMyI18n = createSharedComposable(() => {
   const lang = useLocalStorage<Languages>(
-    'lang',
-    navigator.language as Languages
+    'lang-v2',
+    'zh-CN'
   );
 
   const i18n = createI18n({

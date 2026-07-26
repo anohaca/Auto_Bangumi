@@ -83,3 +83,96 @@ def test_rule_key_changes_when_matching_fields_change():
     original = AniRssMetadataCache._rule_key(rule)
     rule.season = 2
     assert AniRssMetadataCache._rule_key(rule) != original
+
+
+def test_ani_rss_fills_missing_score_and_short_episode_count(monkeypatch):
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_query_ani_rss",
+        lambda rule, jp_title: {
+            "bgmId": 572613,
+            "bgmName": "いびってこない義母と義姉",
+            "score": 6.1,
+            "currentEpisodeNumber": 3,
+            "totalEpisodeNumber": 12,
+            "matchedBy": "中文",
+        },
+    )
+    metadata = {
+        "score": 0,
+        "currentEpisodeNumber": 3,
+        "totalEpisodeNumber": 10,
+    }
+
+    result = AniRssMetadataCache._verify_with_ani_rss(metadata, make_rule())
+
+    assert result["bgmId"] == 572613
+    assert result["score"] == 6.1
+    assert result["totalEpisodeNumber"] == 12
+    assert result["aniRssCheckedAt"] > 0
+
+
+def test_ani_rss_does_not_replace_valid_tmdb_metadata(monkeypatch):
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_query_ani_rss",
+        lambda rule, jp_title: (_ for _ in ()).throw(
+            AssertionError("ANI-RSS must not be queried")
+        ),
+    )
+    metadata = {"score": 7.5, "totalEpisodeNumber": 12}
+
+    assert AniRssMetadataCache._verify_with_ani_rss(metadata, make_rule()) == metadata
+
+
+def test_ani_rss_falls_back_from_exact_chinese_to_exact_japanese(monkeypatch):
+    candidates = [
+        {
+            "id": "569671",
+            "name": "炎の闘球女 ドッジ弾子",
+            "nameCn": "斗球女弹子",
+            "season": 1,
+        }
+    ]
+    detail = {
+        "score": 6.2,
+        "totalEpisodeNumber": 12,
+    }
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_ani_rss_post",
+        lambda path: detail if path.startswith("getAniBySubjectId") else candidates,
+    )
+    rule = make_rule()
+    rule.official_title = "炎之斗球女 弹子"
+
+    result = AniRssMetadataCache._query_ani_rss(
+        rule, "炎の闘球女 ドッジ弾子"
+    )
+
+    assert result["bgmId"] == 569671
+    assert result["matchedBy"] == "日文"
+
+
+def test_ani_rss_rejects_non_exact_chinese_without_japanese(monkeypatch):
+    monkeypatch.setattr(
+        AniRssMetadataCache,
+        "_ani_rss_post",
+        lambda path: [
+            {
+                "id": "569671",
+                "name": "炎の闘球女 ドッジ弾子",
+                "nameCn": "斗球女弹子",
+                "season": 1,
+            }
+        ],
+    )
+    rule = make_rule()
+    rule.official_title = "炎之斗球女 弹子"
+
+    try:
+        AniRssMetadataCache._query_ani_rss(rule)
+    except LookupError as error:
+        assert str(error) == "ANI-RSS not found"
+    else:
+        raise AssertionError("non-exact Chinese title must be rejected")

@@ -1,4 +1,6 @@
-from fastapi import Cookie, Depends, HTTPException, status
+from ipaddress import ip_address
+
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 from module.database import Database
@@ -12,9 +14,20 @@ active_user = []
 
 
 async def get_current_user(
+    request: Request,
     token: str | None = Cookie(None),
     bearer_token: str | None = Depends(oauth2_scheme),
 ):
+    client_host = request.client.host if request.client else ""
+    try:
+        client_ip = ip_address(client_host)
+    except ValueError:
+        client_ip = None
+    if client_ip and (
+        client_ip.is_private or client_ip.is_loopback or client_ip.is_link_local
+    ):
+        return "local"
+
     token = bearer_token or token
     if not token:
         raise UNAUTHORIZED
@@ -22,9 +35,7 @@ async def get_current_user(
     if not payload:
         raise UNAUTHORIZED
     username = payload.get("sub")
-    if not username:
-        raise UNAUTHORIZED
-    if username not in active_user:
+    if not username or username not in active_user:
         raise UNAUTHORIZED
     return username
 

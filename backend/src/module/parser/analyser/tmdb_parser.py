@@ -1,6 +1,7 @@
 import re
 import time
 from dataclasses import dataclass
+from datetime import date
 
 from module.conf import TMDB_API
 from module.network import RequestContent
@@ -57,6 +58,83 @@ def is_animation(tv_id, language) -> bool:
     return False
 
 
+def _normalized_title(title: str | None) -> str:
+    return re.sub(r"\s+", "", str(title or "")).casefold()
+
+
+def _is_animation_candidate(content: dict, language: str) -> bool:
+    genre_ids = content.get("genre_ids")
+    if isinstance(genre_ids, list):
+        return 16 in genre_ids
+    return is_animation(content["id"], language)
+
+
+def _episode_air_date(
+    tv_id: int,
+    season_number: int,
+    episode_number: int,
+    language: str,
+) -> date | None:
+    season = tmdb_season_parser(tv_id, season_number, language)
+    for episode in season.get("episodes") or []:
+        if episode.get("episode_number") != episode_number:
+            continue
+        air_date = episode.get("air_date")
+        if air_date:
+            return date.fromisoformat(str(air_date)[:10])
+    return None
+
+
+def select_tmdb_candidate(
+    contents: list[dict],
+    title: str,
+    language: str,
+    season_number: int | None = None,
+    episode_number: int | None = None,
+    reference_date: date | None = None,
+) -> dict | None:
+    """Keep the old match unless multiple animated candidates need disambiguation."""
+    animated = [
+        content for content in contents if _is_animation_candidate(content, language)
+    ]
+    if not animated:
+        return None
+    if len(animated) == 1 or not season_number or not episode_number:
+        normalized_title = _normalized_title(title)
+        return min(
+            animated,
+            key=lambda content: _normalized_title(content.get("name"))
+            != normalized_title,
+        )
+
+    observed = reference_date or date.today()
+    dated_candidates = []
+    for content in animated:
+        try:
+            air_date = _episode_air_date(
+                content["id"], season_number, episode_number, language
+            )
+        except (KeyError, TypeError, ValueError):
+            air_date = None
+        if air_date is not None:
+            dated_candidates.append((abs((observed - air_date).days), content, air_date))
+
+    if dated_candidates:
+        dated_candidates.sort(
+            key=lambda item: (
+                item[0],
+                _normalized_title(item[1].get("name")) != _normalized_title(title),
+            )
+        )
+        return dated_candidates[0][1]
+
+    normalized_title = _normalized_title(title)
+    return min(
+        animated,
+        key=lambda content: _normalized_title(content.get("name")) != normalized_title,
+    )
+
+
 def get_season(seasons: list) -> tuple[int, str]:
     ss = [s for s in seasons if s["air_date"] is not None and "特别" not in s["season"]]
     ss = sorted(ss, key=lambda e: e.get("air_date"), reverse=True)
@@ -72,7 +150,14 @@ def get_season(seasons: list) -> tuple[int, str]:
     return len(ss), ss[-1].get("poster_path")
 
 
-def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
+def tmdb_parser(
+    title,
+    language,
+    test: bool = False,
+    season_number: int | None = None,
+    episode_number: int | None = None,
+    reference_date: date | None = None,
+) -> TMDBInfo | None:
     with RequestContent() as req:
         url = search_url(title, language)
         contents = req.get_json(url).get("results")
@@ -81,19 +166,14 @@ def tmdb_parser(title, language, test: bool = False) -> TMDBInfo | None:
             contents = req.get_json(url).get("results")
         # 判断动画
         if contents:
-            normalized_title = re.sub(r"\s+", "", title).casefold()
-            ordered_contents = sorted(
+            selected = select_tmdb_candidate(
                 contents,
-                key=lambda content: re.sub(
-                    r"\s+", "", str(content.get("name") or "")
-                ).casefold()
-                != normalized_title,
+                title,
+                language,
+                season_number,
+                episode_number,
+                reference_date,
             )
-            selected = None
-            for content in ordered_contents:
-                if is_animation(content["id"], language):
-                    selected = content
-                    break
             if not selected:
                 return None
             id = selected["id"]

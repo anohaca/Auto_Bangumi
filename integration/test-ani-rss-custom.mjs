@@ -7,6 +7,18 @@ const source = await fs.readFile(
   'utf8'
 );
 
+const decorateSource = source.slice(
+  source.indexOf('const decorateCards ='),
+  source.indexOf('const reloadMergedList =')
+);
+assert.equal(
+  decorateSource.includes(
+    "querySelectorAll('.ab-card-action,.ab-card-action-spacer')"
+  ),
+  false,
+  'redecorating must not remove AB-only card actions before they can be reused'
+);
+
 const ani = (id, title, weekLabel) => ({
   sort: id,
   id: String(id),
@@ -66,11 +78,28 @@ const rules = [
     eps_collect: false,
     offset: 0,
     filter: '720',
-    rss_link: 'https://example.test/unique.xml',
+    rss_link: ',https://example.test/unique.xml,,',
     poster_link: 'posters/unique.jpg',
     added: true,
     rule_name: 'AB Unique',
     save_path: '/downloads/AB Unique',
+    deleted: false,
+  },
+  {
+    id: 103,
+    official_title: 'Completed Anime',
+    title_raw: 'Completed Anime',
+    year: '2026',
+    season: 1,
+    group_name: 'AB Group',
+    eps_collect: true,
+    offset: 0,
+    filter: '',
+    rss_link: 'https://example.test/completed.xml',
+    poster_link: '',
+    added: true,
+    rule_name: 'Completed Anime',
+    save_path: '',
     deleted: false,
   },
 ];
@@ -83,8 +112,9 @@ const listResult = () => ({
     weekList: [
       { weekLabel: '\u661f\u671f\u4e00', items: [ani(1, 'ANI Only', '\u661f\u671f\u4e00')] },
       { weekLabel: '\u661f\u671f\u4e8c', items: [ani(2, 'Shared Anime', '\u661f\u671f\u4e8c')] },
+      { weekLabel: '\u661f\u671f\u4e09', items: [ani(3, 'Completed Anime', '\u661f\u671f\u4e09')] },
     ],
-    total: 2,
+    total: 3,
   },
 });
 
@@ -126,6 +156,18 @@ const run = async (withToken, metadataDelay = 0) => {
               image: 'https://example.test/unique.jpg',
               score: 8.2,
               currentEpisodeNumber: 4,
+              totalEpisodeNumber: 12,
+            },
+          },
+          {
+            rule: rules[2],
+            metadata: {
+              title: 'Completed Anime',
+              jpTitle: 'Completed Anime',
+              releaseDate: '2026-04-01',
+              weekLabel: '\u661f\u671f\u4e09',
+              season: 1,
+              currentEpisodeNumber: 12,
               totalEpisodeNumber: 12,
             },
           },
@@ -252,7 +294,7 @@ const run = async (withToken, metadataDelay = 0) => {
 };
 
 const authenticated = await run(true, 100);
-assert.equal(authenticated.firstResult.data.total, 2);
+assert.equal(authenticated.firstResult.data.total, 3);
 assert.ok(
   authenticated.firstElapsed < 80,
   `native list was blocked for ${authenticated.firstElapsed}ms`
@@ -265,6 +307,7 @@ assert.deepEqual(
   items.map((item) => item.title).sort(),
   ['AB Unique', 'ANI Only', 'Shared Anime']
 );
+assert.equal(items.some((item) => item.title === 'Completed Anime'), false);
 assert.equal(items.filter((item) => item.title === 'Shared Anime').length, 1);
 assert.equal(
   items.find((item) => item.title === 'Shared Anime')._abSource,
@@ -278,6 +321,8 @@ assert.equal(
 const unique = items.find((item) => item.title === 'AB Unique');
 assert.equal(unique._abSource, 'AutoBangumi');
 assert.equal(unique.id, 'autobangumi-102');
+assert.equal(unique.url, 'https://example.test/unique.xml');
+assert.equal(unique.cover, 'https://example.test/unique.jpg');
 assert.equal(unique.weekLabel, '\u661f\u671f\u56db');
 assert.equal(unique.score, 8.2);
 assert.equal(unique.currentEpisodeNumber, 4);

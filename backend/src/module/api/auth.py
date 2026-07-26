@@ -32,12 +32,12 @@ async def login(response: Response, form_data=Depends(OAuth2PasswordRequestForm)
     return u_response(resp)
 
 
-@router.get(
-    "/refresh_token", response_model=dict, dependencies=[Depends(get_current_user)]
-)
-async def refresh(response: Response):
+@router.get("/refresh_token", response_model=dict)
+async def refresh(
+    response: Response, current_user: str = Depends(get_current_user)
+):
     token = create_access_token(
-        data={"sub": active_user[0]}, expires_delta=timedelta(days=1)
+        data={"sub": current_user}, expires_delta=timedelta(days=1)
     )
     response.set_cookie(key="token", value=token, httponly=True, max_age=86400)
     return {"access_token": token, "token_type": "bearer"}
