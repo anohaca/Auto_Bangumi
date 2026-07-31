@@ -17,6 +17,8 @@ class Downloader(BaseModel):
     password_: str = Field(
         "adminadmin", alias="password", description="Downloader password"
     )
+    api_key_enable: bool = Field(False, description="Use downloader API key")
+    api_key_: str = Field("", alias="api_key", description="Downloader API key")
     path: str = Field("/downloads/Bangumi", description="Downloader path")
     ssl: bool = Field(False, description="Downloader ssl")
 
@@ -31,6 +33,10 @@ class Downloader(BaseModel):
     @property
     def password(self):
         return expandvars(self.password_)
+
+    @property
+    def api_key(self):
+        return expandvars(self.api_key_)
 
 
 class RSSParser(BaseModel):

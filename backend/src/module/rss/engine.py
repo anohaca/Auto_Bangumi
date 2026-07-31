@@ -4,8 +4,9 @@ from typing import Optional
 
 from module.database import Database, engine
 from module.downloader import DownloadClient
-from module.models import Bangumi, ResponseModel, RSSItem, Torrent
+from module.models import Bangumi, DownloadedEpisode, ResponseModel, RSSItem, Torrent
 from module.network import RequestContent
+from module.parser.analyser.raw_parser import raw_parser as parse_episode
 
 logger = logging.getLogger(__name__)
 
@@ -102,13 +103,33 @@ class RSSEngine(Database):
     def match_torrent(self, torrent: Torrent) -> Optional[Bangumi]:
         matched: Bangumi = self.bangumi.match_torrent(torrent.name)
         if matched:
+            torrent.bangumi_id = matched.id
             if matched.filter == "":
                 return matched
             _filter = matched.filter.replace(",", "|")
             if not re.search(_filter, torrent.name, re.IGNORECASE):
-                torrent.bangumi_id = matched.id
                 return matched
         return None
+
+    def record_downloaded_torrent(self, torrent: Torrent, bangumi: Bangumi):
+        parsed = parse_episode(torrent.name)
+        if not parsed or parsed.episode is None:
+            logger.warning("[Engine] Cannot cache episode: %s", torrent.name)
+            return
+        self.downloaded_episode.upsert(
+            DownloadedEpisode(
+                bangumi_id=bangumi.id,
+                season=bangumi.season,
+                episode=float(parsed.episode),
+                name=torrent.name,
+            )
+        )
+        logger.debug(
+            "[Engine] Cached %s S%02dE%s",
+            bangumi.official_title,
+            bangumi.season,
+            parsed.episode,
+        )
 
     def refresh_rss(self, client: DownloadClient, rss_id: Optional[int] = None):
         # Get All RSS Items
@@ -121,15 +142,21 @@ class RSSEngine(Database):
         logger.debug(f"[Engine] Get {len(rss_items)} RSS items")
         for rss_item in rss_items:
             new_torrents = self.pull_rss(rss_item)
+            downloaded = []
             # Get all enabled bangumi data
             for torrent in new_torrents:
                 matched_data = self.match_torrent(torrent)
                 if matched_data:
                     if client.add_torrent(torrent, matched_data):
                         logger.debug(f"[Engine] Add torrent {torrent.name} to client")
-                    torrent.downloaded = True
+                        self.torrent.mark_downloaded(torrent)
+                        downloaded.append((torrent, matched_data))
+                    else:
+                        self.torrent.schedule_retry(torrent)
             # Add all torrents to database
             self.torrent.add_all(new_torrents)
+            for torrent, bangumi in downloaded:
+                self.record_downloaded_torrent(torrent, bangumi)
 
     def download_bangumi(self, bangumi: Bangumi):
         with RequestContent() as req:
@@ -138,8 +165,15 @@ class RSSEngine(Database):
             )
             if torrents:
                 with DownloadClient() as client:
-                    client.add_torrent(torrents, bangumi)
+                    added = client.add_torrent(torrents, bangumi)
+                    if added:
+                        for torrent in torrents:
+                            torrent.bangumi_id = bangumi.id
+                            torrent.downloaded = True
                     self.torrent.add_all(torrents)
+                    if added:
+                        for torrent in torrents:
+                            self.record_downloaded_torrent(torrent, bangumi)
                     return ResponseModel(
                         status=True,
                         status_code=200,

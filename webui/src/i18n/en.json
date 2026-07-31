@@ -3,6 +3,8 @@
     "apply": "Apply",
     "cancel": "Cancel",
     "downloader_set": {
+      "api_key": "API Key",
+      "api_key_enable": "Use API Key",
       "host": "Host",
       "password": "Password",
       "path": "Download Path",

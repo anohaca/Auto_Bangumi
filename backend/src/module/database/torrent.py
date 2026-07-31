@@ -1,4 +1,5 @@
 import logging
+import time
 
 from sqlmodel import Session, select
 
@@ -8,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class TorrentDatabase:
+    retry_delays = (600, 1800, 3600, 10800, 21600)
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -50,8 +53,34 @@ class TorrentDatabase:
     def check_new(self, torrents_list: list[Torrent]) -> list[Torrent]:
         new_torrents = []
         old_torrents = self.search_all()
-        old_urls = [t.url for t in old_torrents]
+        old_by_url = {torrent.url: torrent for torrent in old_torrents}
         for torrent in torrents_list:
-            if torrent.url not in old_urls:
+            old = old_by_url.get(torrent.url)
+            if old is None:
                 new_torrents.append(torrent)
+            elif (
+                old.bangumi_id is not None
+                and not old.downloaded
+                and int(old.retry_after or 0) <= int(time.time())
+            ):
+                new_torrents.append(old)
         return new_torrents
+
+    def schedule_retry(self, data: Torrent, now: int | None = None):
+        data.retry_count = int(data.retry_count or 0) + 1
+        delay = self.retry_delays[
+            min(data.retry_count - 1, len(self.retry_delays) - 1)
+        ]
+        data.retry_after = int(now or time.time()) + delay
+        self.update(data)
+        logger.warning(
+            "[Torrent] Retry %s in %d minutes (attempt %d).",
+            data.name,
+            delay // 60,
+            data.retry_count,
+        )
+
+    def mark_downloaded(self, data: Torrent):
+        data.downloaded = True
+        data.retry_count = 0
+        data.retry_after = 0

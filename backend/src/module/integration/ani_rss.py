@@ -338,12 +338,22 @@ class AniRssMetadataCache:
                 len(missing),
             )
             await asyncio.gather(*(refresh(rule, key) for rule, key in missing))
+            with Database() as database:
+                downloaded_episodes = database.downloaded_episode.latest_all()
             items = []
             for rule, payload in zip(rules, rule_payloads):
+                metadata = dict(entries.get(cls._rule_key(rule), {}))
+                downloaded_episode = downloaded_episodes.get(rule.id)
+                if downloaded_episode is not None:
+                    metadata["downloadedEpisodeNumber"] = downloaded_episode
+                    metadata["currentEpisodeNumber"] = max(
+                        float(metadata.get("currentEpisodeNumber") or 0),
+                        downloaded_episode,
+                    )
                 items.append(
                     {
                         "rule": payload,
-                        "metadata": entries.get(cls._rule_key(rule), {}),
+                        "metadata": metadata,
                     }
                 )
             result = {

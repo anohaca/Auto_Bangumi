@@ -3,6 +3,8 @@
     "apply": "应用",
     "cancel": "取消",
     "downloader_set": {
+      "api_key": "API Key",
+      "api_key_enable": "使用 API Key",
       "host": "下载器地址",
       "password": "密码",
       "path": "下载地址",

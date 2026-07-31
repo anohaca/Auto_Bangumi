@@ -1,14 +1,15 @@
-import logging
 import asyncio
+import logging
 
 from module.conf import VERSION, settings
+from module.database import Database
 from module.models import ResponseModel
 from module.update import (
+    cache_image,
     data_migration,
     first_run,
     from_30_to_31,
     start_up,
-    cache_image,
 )
 
 from .sub_thread import RenameThread, RSSThread
@@ -40,6 +41,9 @@ class Program(RenameThread, RSSThread):
 
     async def startup(self):
         self.__start_info()
+        if self.database:
+            with Database() as database:
+                database.ensure_schema()
         if not self.database:
             first_run()
             logger.info("[Core] No db file exists, create database file.")

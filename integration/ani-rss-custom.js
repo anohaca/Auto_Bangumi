@@ -24,6 +24,8 @@
     host: '\u5730\u5740',
     username: '\u7528\u6237\u540d',
     password: '\u5bc6\u7801',
+    apiKey: 'API Key',
+    apiKeyEnable: '\u4f7f\u7528 API Key',
     path: '\u4e0b\u8f7d\u8def\u5f84',
     ssl: '\u4f7f\u7528 SSL',
     renameMethod: '\u91cd\u547d\u540d\u65b9\u5f0f',
@@ -37,6 +39,10 @@
     loading: '\u6b63\u5728\u8bfb\u53d6 AutoBangumi \u8bbe\u7f6e...',
     ready: '\u5df2\u8fde\u63a5 AutoBangumi',
     saved: '\u5df2\u4fdd\u5b58\uff0cAutoBangumi \u6b63\u5728\u91cd\u542f',
+    testNotification: '\u6d4b\u8bd5\u901a\u77e5',
+    testingNotification: '\u6b63\u5728\u53d1\u9001\u6d4b\u8bd5\u901a\u77e5...',
+    notificationSent: '\u6d4b\u8bd5\u901a\u77e5\u5df2\u53d1\u9001',
+    notificationFailed: '\u6d4b\u8bd5\u901a\u77e5\u53d1\u9001\u5931\u8d25',
     loginTitle: '\u8bf7\u5148\u767b\u5f55 AutoBangumi',
     login: '\u767b\u5f55\u5e76\u8bfb\u53d6\u8bbe\u7f6e',
     loginFailed: '\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u8d26\u53f7\u5bc6\u7801',
@@ -68,6 +74,8 @@
         ['downloader.host', t.host, 'text'],
         ['downloader.username', t.username, 'text'],
         ['downloader.password', t.password, 'password'],
+        ['downloader.api_key_enable', t.apiKeyEnable, 'checkbox'],
+        ['downloader.api_key', t.apiKey, 'password'],
         ['downloader.path', t.path, 'text'],
         ['downloader.ssl', t.ssl, 'checkbox'],
       ],
@@ -366,6 +374,36 @@
     }
   };
 
+  const testNotification = async () => {
+    const button = panel()?.querySelector('.ab-test-notification');
+    if (!button) return;
+    const type = field('notification.type')?.value || '';
+    const token = field('notification.token')?.value || '';
+    const chatId = field('notification.chat_id')?.value || '';
+    button.disabled = true;
+    setStatus(t.testingNotification);
+    try {
+      const response = await request('/api/v1/config/notification/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enable: true,
+          type,
+          token,
+          chat_id: chatId,
+        }),
+      });
+      const result = await response.json();
+      setStatus(result.msg_zh || t.notificationSent);
+    } catch (error) {
+      if (error.message !== 'unauthorized') {
+        setStatus(t.notificationFailed, true);
+      }
+    } finally {
+      button.disabled = false;
+    }
+  };
+
   const createPanel = (tabs) => {
     const element = document.createElement('div');
     element.id = PANEL_ID;
@@ -391,6 +429,11 @@
             group.title +
             '</h4><div class="ab-fields">' +
             group.fields.map(inputHtml).join('') +
+            (group.title === t.notification
+              ? '<div class="ab-notification-test-row"><button type="button" class="el-button ab-test-notification">' +
+                t.testNotification +
+                '</button></div>'
+              : '') +
             '</div></section>'
         )
         .join('') +
@@ -430,7 +473,7 @@
       PANEL_ID +
       ' input:not([type=checkbox]),#' +
       PANEL_ID +
-      ' select{width:190px;height:32px;padding:0 9px;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-fill-color-blank);color:var(--el-text-color-primary);box-sizing:border-box}' +
+      ' select{width:190px;height:32px;padding:0 9px;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-fill-color-blank);color:var(--el-text-color-primary);font-size:14px;box-sizing:border-box}' +
       '#' +
       PANEL_ID +
       ' .ab-check{justify-content:flex-start}' +
@@ -467,6 +510,9 @@
       ' .ab-login-button{justify-self:end}' +
       '#' +
       PANEL_ID +
+      ' .ab-notification-test-row{display:flex;justify-content:flex-end}' +
+      '#' +
+      PANEL_ID +
       ' .el-button--primary{--el-button-bg-color:var(--ab-brand);--el-button-border-color:var(--ab-brand);--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
       '@media(max-width:900px){#' +
       PANEL_ID +
@@ -474,6 +520,9 @@
     document.head.appendChild(style);
     tabs.appendChild(element);
     element.querySelector('.ab-save').addEventListener('click', saveConfig);
+    element
+      .querySelector('.ab-test-notification')
+      .addEventListener('click', testNotification);
     element.querySelector('.ab-login-button').addEventListener('click', login);
     return element;
   };
@@ -574,6 +623,10 @@
     close: '\u5173\u95ed',
     edit: '\u7f16\u8f91',
     delete: '\u5220\u9664',
+    localEpisodes: '\u672c\u5730\u96c6\u6570',
+    noLocalEpisodes: '\u6682\u65e0\u672c\u5730\u96c6\u6570',
+    loadingLocalEpisodes: '\u6b63\u5728\u8bfb\u53d6\u672c\u5730\u96c6\u6570...',
+    playbackUnavailable: 'AutoBangumi \u6682\u4e0d\u652f\u6301\u5728\u7ebf\u64ad\u653e',
     save: '\u4fdd\u5b58',
     cancel: '\u53d6\u6d88',
     title: '\u756a\u5267\u540d',
@@ -976,6 +1029,121 @@
     }
   };
 
+  const formatBytes = (bytes) => {
+    const value = Number(bytes || 0);
+    if (!value) return '0 B';
+    const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+    const index = Math.min(
+      Math.floor(Math.log(value) / Math.log(1024)),
+      units.length - 1
+    );
+    return (value / 1024 ** index).toFixed(index >= 3 ? 2 : 1) + ' ' + units[index];
+  };
+
+  const formatLocalTime = (timestamp) => {
+    const value = Number(timestamp || 0);
+    if (!value) return '';
+    const date = new Date(value * 1000);
+    const pad = (part) => String(part).padStart(2, '0');
+    return (
+      pad(date.getMonth() + 1) +
+      '-' +
+      pad(date.getDate()) +
+      ' ' +
+      pad(date.getHours()) +
+      ':' +
+      pad(date.getMinutes()) +
+      ':' +
+      pad(date.getSeconds())
+    );
+  };
+
+  const openLocalEpisodes = async (rule) => {
+    const body = document.createElement('div');
+    body.className = 'ab-local-content';
+    body.textContent = text.loadingLocalEpisodes;
+    const instance = modal(
+      rule.official_title || rule.title_raw,
+      body,
+      'ab-local-episodes-modal'
+    );
+    const dialog = instance.overlay.querySelector('.el-dialog');
+    dialog.classList.add('is-align-center', 'el-dialog--center');
+    dialog.querySelector('.el-dialog__header')?.classList.add('show-close');
+    try {
+      const result = await abRequest('/api/v1/bangumi/local/' + rule.id);
+      body.textContent = '';
+      const items = Array.isArray(result.items) ? result.items : [];
+      const scrollbar = document.createElement('div');
+      scrollbar.className = 'el-scrollbar ab-local-scrollbar';
+      const wrap = document.createElement('div');
+      wrap.className = 'el-scrollbar__wrap el-scrollbar__wrap--hidden-default';
+      const view = document.createElement('div');
+      view.className = 'el-scrollbar__view';
+      const grid = document.createElement('div');
+      grid.className = 'grid-container ab-local-grid';
+      view.appendChild(grid);
+      wrap.appendChild(view);
+      scrollbar.appendChild(wrap);
+      body.appendChild(scrollbar);
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'ab-local-empty';
+        empty.textContent = text.noLocalEpisodes;
+        grid.appendChild(empty);
+      }
+      items.forEach((item) => {
+        const wrapper = document.createElement('div');
+        const card = document.createElement('div');
+        card.className = 'el-card is-never-shadow ab-local-card';
+        const cardBody = document.createElement('div');
+        cardBody.className = 'el-card__body';
+        const row = document.createElement('div');
+        row.className = 'grid-item ab-local-episode-row';
+        const main = document.createElement('div');
+        main.className = 'ab-local-episode-main';
+        const label = document.createElement('span');
+        label.className =
+          'el-text is-line-clamp el-tooltip__trigger ab-local-episode-label';
+        label.style.webkitLineClamp = '2';
+        label.textContent = item.label || '';
+        const br = document.createElement('br');
+        const detail = document.createElement('span');
+        detail.className =
+          'el-text el-text--info el-text--small ab-local-episode-detail';
+        detail.textContent =
+          formatBytes(item.size) +
+          (item.completedAt ? ' | ' + formatLocalTime(item.completedAt) : '');
+        main.append(label, br, detail);
+        const play = document.createElement('button');
+        play.type = 'button';
+        play.className =
+          'el-button el-button--primary el-button--large is-circle is-text ab-local-play';
+        play.title = text.playbackUnavailable;
+        play.setAttribute('aria-label', text.playbackUnavailable);
+        play.innerHTML =
+          '<i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+          '<path fill="currentColor" d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896m0 832a384 384 0 0 0 0-768 384 384 0 0 0 0 768m-48-247.616L668.608 512 464 375.616zm10.624-342.656 249.472 166.336a48 48 0 0 1 0 79.872L474.624 718.272A48 48 0 0 1 400 678.336V345.6a48 48 0 0 1 74.624-39.936z"/></svg></i>';
+        play.addEventListener('click', () =>
+          notify(text.playbackUnavailable, true)
+        );
+        row.append(main, play);
+        row.title = item.name || '';
+        cardBody.appendChild(row);
+        card.appendChild(cardBody);
+        wrapper.appendChild(card);
+        grid.appendChild(wrapper);
+      });
+      const summary = document.createElement('p');
+      summary.className = 'total-text ab-local-summary';
+      summary.textContent = '\u5171 ' + items.length + ' \u9879';
+      body.appendChild(summary);
+    } catch (error) {
+      body.textContent = text.failed + ': ' + error.message;
+      body.classList.add('is-error');
+    }
+  };
+
   const addManageAction = (card, rule) => {
     const actions = card.querySelector('.list-card-actions');
     if (!actions || actions.querySelector('.ab-card-edit')) return;
@@ -983,6 +1151,7 @@
     if (nativeButtons.length < 2) return;
     const editTemplate = nativeButtons[nativeButtons.length - 2];
     const deleteTemplate = nativeButtons[nativeButtons.length - 1];
+    const localTemplate = nativeButtons[0];
     const spacerTemplate = actions.querySelector('.list-card-spacer');
     const editButton = nativeCardButton(
       editTemplate,
@@ -996,11 +1165,19 @@
       text.delete + ' AutoBangumi',
       () => deleteRule(rule)
     );
+    const localButton = nativeCardButton(
+      localTemplate,
+      'ab-card-local',
+      text.localEpisodes + ' AutoBangumi',
+      () => openLocalEpisodes(rule)
+    );
     if (card.dataset.abOnly === 'true') {
       actions.textContent = '';
     }
     if (card.dataset.abOnly === 'true') {
       actions.append(
+        localButton,
+        nativeCardSpacer(spacerTemplate),
         editButton,
         nativeCardSpacer(spacerTemplate),
         deleteButton
@@ -1165,6 +1342,16 @@
             resolved.directMatch ||
             aniItems.find((item) => sameTitle(item, rule, metadata));
           if (match) {
+            match.currentEpisodeNumber = Math.max(
+              Number(match.currentEpisodeNumber || 0),
+              Number(metadata.currentEpisodeNumber || 0)
+            );
+            if (
+              Number(metadata.totalEpisodeNumber || 0) >
+              Number(match.totalEpisodeNumber || 0)
+            ) {
+              match.totalEpisodeNumber = Number(metadata.totalEpisodeNumber);
+            }
             match._abSource = text.both;
             match._abRuleId = rule.id;
             registerSource(match, text.both, rule, metadata);
@@ -1372,9 +1559,11 @@
     mergeTimer = window.setTimeout(decorateCards, delay);
   };
 
-  const modal = (title, body) => {
+  const modal = (title, body, className = '') => {
     const overlay = document.createElement('div');
-    overlay.className = 'el-overlay ab-modal-overlay';
+    overlay.className =
+      'el-overlay ab-modal-overlay dialog-fade-enter-active' +
+      (className ? ' ' + className : '');
     overlay.innerHTML =
       '<div role="dialog" aria-modal="true" aria-label="' +
       title +
@@ -1387,12 +1576,22 @@
       '<path fill="currentColor" d="M764.288 214.592 512 466.88 259.712 214.592a32 32 0 1 0-45.248 45.248L466.752 512 214.464 764.288a32 32 0 1 0 45.248 45.248L512 557.248l252.288 252.288a32 32 0 1 0 45.248-45.248L557.248 512l252.288-252.288a32 32 0 1 0-45.248-45.248z"/></svg></i>' +
       '</button></header><div class="el-dialog__body"></div></div></div>';
     overlay.querySelector('.el-dialog__body').appendChild(body);
-    const close = () => overlay.remove();
+    const close = () => {
+      if (overlay.classList.contains('dialog-fade-leave-active')) return;
+      overlay.classList.remove('dialog-fade-enter-active');
+      overlay.classList.add('dialog-fade-leave-active');
+      window.setTimeout(() => overlay.remove(), 300);
+    };
     overlay.querySelector('.el-dialog__headerbtn').addEventListener('click', close);
     overlay.addEventListener('click', (event) => {
       if (event.target === overlay) close();
     });
     document.body.appendChild(overlay);
+    overlay.addEventListener(
+      'animationend',
+      () => overlay.classList.remove('dialog-fade-enter-active'),
+      { once: true }
+    );
     return { overlay, close };
   };
 
@@ -1422,18 +1621,24 @@
       label +
       '</span><div class="el-form-item__content">' +
       '<div class="el-input-number ab-number-input">' +
-      '<button type="button" class="el-input-number__decrease">\u2212</button>' +
-      '<button type="button" class="el-input-number__increase">+</button>' +
-      '<div class="el-input"><div class="el-input__wrapper">' +
-      '<input class="el-input__inner" name="' +
+      '<span role="button" aria-label="decrease number" class="el-input-number__decrease">' +
+      '<i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+      '<path fill="currentColor" d="M128 480h768v64H128z"/></svg></i></span>' +
+      '<span role="button" aria-label="increase number" class="el-input-number__increase">' +
+      '<i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true">' +
+      '<path fill="currentColor" d="M480 128h64v352h352v64H544v352h-64V544H128v-64h352z"/></svg></i></span>' +
+      '<div class="el-input"><div class="el-input__wrapper" tabindex="-1">' +
+      '<input class="el-input__inner" role="spinbutton" autocomplete="off" name="' +
       name +
       '" type="number"></div></div></div></div>';
     const input = row.querySelector('input');
     input.value = Number(value || 0);
+    input.setAttribute('aria-valuenow', input.value);
     if (min != null) input.min = String(min);
     const update = (delta) => {
       const next = Number(input.value || 0) + delta;
       input.value = min == null ? next : Math.max(min, next);
+      input.setAttribute('aria-valuenow', input.value);
       input.dispatchEvent(new Event('input', { bubbles: true }));
     };
     row
@@ -1442,6 +1647,45 @@
     row
       .querySelector('.el-input-number__increase')
       .addEventListener('click', () => update(1));
+    return row;
+  };
+
+  const selectRow = (label, name, value, choices) => {
+    const row = document.createElement('label');
+    row.className = 'el-form-item ab-form-row';
+    row.innerHTML =
+      '<span class="el-form-item__label">' +
+      label +
+      '</span><div class="el-form-item__content"><select name="' +
+      name +
+      '">' +
+      choices
+        .map(
+          (choice) =>
+            '<option value="' + choice + '">' + choice + '</option>'
+        )
+        .join('') +
+      '</select></div>';
+    row.querySelector('select').value = value;
+    return row;
+  };
+
+  const switchRow = (label, name, value) => {
+    const row = document.createElement('div');
+    row.className = 'el-form-item ab-form-row';
+    row.innerHTML =
+      '<span class="el-form-item__label">' +
+      label +
+      '</span><div class="el-form-item__content">' +
+      '<label class="el-switch"><input class="el-switch__input" name="' +
+      name +
+      '" type="checkbox"><span class="el-switch__core">' +
+      '<span class="el-switch__action"></span></span></label></div>';
+    const input = row.querySelector('input');
+    input.checked = Boolean(value);
+    input.addEventListener('change', () =>
+      input.closest('.el-switch')?.classList.toggle('is-checked', input.checked)
+    );
     return row;
   };
 
@@ -1585,9 +1829,13 @@
     });
     const actions = document.createElement('div');
     actions.className = 'el-dialog__footer ab-modal-actions';
-    const instance = modal('\u4fee\u6539\u8ba2\u9605', content);
+    const instance = modal(
+      '\u4fee\u6539\u8ba2\u9605',
+      content,
+      'ab-rule-modal'
+    );
     const cancelButton = button(text.cancel, '', () => instance.close());
-    cancelButton.classList.remove('is-text');
+    cancelButton.classList.add('is-has-bg');
     const saveButton = button('\u786e\u5b9a', 'el-button--primary', async () => {
         const updated = { ...rule };
         content.querySelectorAll('[name]').forEach((input) => {
@@ -1610,7 +1858,7 @@
           notify(text.failed + ': ' + error.message, true);
         }
       });
-    saveButton.classList.remove('is-text');
+    saveButton.classList.add('is-has-bg');
     actions.append(cancelButton, saveButton);
     content.appendChild(actions);
   };
@@ -1620,15 +1868,10 @@
     content.className = 'ab-add-form';
     content.appendChild(formRow(text.rssUrl, 'url', ''));
     content.appendChild(formRow(text.rssName, 'name', ''));
-    const parserRow = document.createElement('label');
-    parserRow.className = 'ab-form-row';
-    parserRow.innerHTML =
-      '<span>' +
-      text.parser +
-      '</span><select name="parser"><option value="mikan">mikan</option>' +
-      '<option value="tmdb">tmdb</option><option value="parser">parser</option></select>';
-    content.appendChild(parserRow);
-    content.appendChild(formRow(text.aggregate, 'aggregate', false, 'checkbox'));
+    content.appendChild(
+      selectRow(text.parser, 'parser', 'mikan', ['mikan', 'tmdb', 'parser'])
+    );
+    content.appendChild(switchRow(text.aggregate, 'aggregate', false));
     const preview = document.createElement('div');
     preview.className = 'ab-subscribe-preview';
     content.appendChild(preview);
@@ -1729,7 +1972,18 @@
       }
       const item = document.createElement('li');
       item.className = 'el-dropdown-menu__item ab-add-entry';
+      item.tabIndex = -1;
       item.textContent = text.add;
+      item.addEventListener('pointerenter', () => {
+        menu
+          .querySelectorAll('.el-dropdown-menu__item')
+          .forEach((sibling) => {
+            if (sibling === item) return;
+            sibling.classList.remove('is-active', 'is-focus', 'is-hovering');
+            sibling.blur?.();
+          });
+        item.focus({ preventScroll: true });
+      });
       item.addEventListener('click', (event) => {
         event.stopPropagation();
         openAdd();
@@ -1748,6 +2002,7 @@
         : '\u4ec5\u663e\u793a\u6d77\u62a5\u548c\u6807\u9898';
       toggle.title = label;
       toggle.setAttribute('aria-label', label);
+      toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
       toggle.innerHTML = enabled
         ? '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true"><path fill="currentColor" d="M128 160h768v704H128V160zm64 64v576h640V224H192zm64 96h256v224H256V320zm320 0h192v64H576v-64zm0 112h192v64H576v-64zm-320 176h512v64H256v-64z"/></svg></i></span>'
         : '<span><i class="el-icon"><svg viewBox="0 0 1024 1024" aria-hidden="true"><path fill="currentColor" d="M128 128h320v320H128V128zm448 0h320v320H576V128zM128 576h320v320H128V576zm448 0h320v320H576V576zM192 192v192h192V192H192zm448 0v192h192V192H640zM192 640v192h192V640H192zm448 0v192h192V640H640z"/></svg></i></span>';
@@ -1759,14 +2014,17 @@
     if (!toolbar || toolbar.querySelector('.ab-mini-list-toggle')) return;
     const template = toolbar.querySelector('button');
     if (!template) return;
-    const wrapper =
-      template.parentElement && template.parentElement !== toolbar
-        ? template.parentElement.cloneNode(false)
-        : document.createElement('div');
-    wrapper.removeAttribute('id');
-    wrapper.classList.add('ab-mini-list-toggle-wrapper');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'ab-mini-list-toggle-wrapper';
     const toggle = template.cloneNode(true);
-    toggle.removeAttribute('id');
+    [
+      'id',
+      'aria-controls',
+      'aria-describedby',
+      'aria-expanded',
+      'aria-haspopup',
+    ].forEach((attribute) => toggle.removeAttribute(attribute));
+    toggle.setAttribute('aria-pressed', 'false');
     toggle.classList.add('ab-mini-list-toggle');
     toggle.addEventListener(
       'click',
@@ -1797,7 +2055,33 @@
       '.ab-card-action{color:#7c3aed!important}' +
       '.ab-card-action .el-icon{font-size:16px}' +
       '.ab-card-delete{color:var(--el-color-danger)!important}' +
+      '.ab-modal-overlay.ab-local-episodes-modal .el-overlay-dialog{width:min(824px,100vw)!important}' +
+      '.ab-local-episodes-modal .ab-modal{box-sizing:border-box;width:100%;padding:16px;overflow:hidden}' +
+      '.ab-local-episodes-modal .ab-modal .el-dialog__header{height:40px;padding:0 32px 16px;justify-content:center;text-align:center;box-sizing:border-box}' +
+      '.ab-local-episodes-modal .ab-modal .el-dialog__headerbtn{top:4px;right:0}' +
+      '.ab-local-episodes-modal .ab-modal .el-dialog__body{padding:0}' +
+      '.ab-local-content{height:526px}' +
+      '.ab-local-scrollbar{height:500px;overflow:hidden}' +
+      '.ab-local-scrollbar>.el-scrollbar__wrap{height:100%;overflow:auto}' +
+      '.ab-local-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:0 5px}' +
+      '.ab-local-grid>div{height:91px!important}' +
+      '.ab-local-card{display:flex;height:91px;border:1px solid var(--el-border-color-lighter);border-radius:12px;background:var(--el-fill-color-light);box-sizing:border-box}' +
+      '.ab-local-grid>div>.ab-local-card{height:91px!important}' +
+      '.ab-local-card>.el-card__body{width:100%;padding:20px;box-sizing:border-box}' +
+      '.ab-local-episode-row{display:flex;align-items:center;justify-content:space-between;height:45px;margin-bottom:4px}' +
+      '.ab-local-episode-main{min-width:0}' +
+      '.ab-local-episode-label{font-size:14px}' +
+      '.ab-local-episode-detail{font-size:12px;color:var(--el-color-info)}' +
+      '.ab-local-play{display:flex;width:40px;height:40px;flex:0 0 40px;align-items:center;justify-content:center;padding:12px;border-radius:50%}' +
+      '.ab-local-summary{height:20px;margin:6px;text-align:end}' +
+      '.ab-local-empty{grid-column:1/-1;padding:24px;text-align:center;color:var(--el-text-color-secondary)}' +
+      '.ab-local-content.is-error{color:var(--el-color-danger)}' +
       '.ab-mini-list-toggle{color:#7c3aed!important}' +
+      '.ab-mini-list-toggle-wrapper{display:flex;align-items:center}' +
+      '.grid-container>div{height:100%}' +
+      '.grid-container>div>.el-card{height:100%}' +
+      '.grid-container>div>.el-card>.el-card__body{height:100%;box-sizing:border-box}' +
+      '.grid-container>div .list-card-content{height:100%;box-sizing:border-box}' +
       '.ab-mini-list .grid-container{grid-template-columns:repeat(auto-fill,minmax(108px,1fr))!important;gap:10px!important}' +
       '.ab-mini-list .grid-container .el-card .el-card__body{padding:8px!important}' +
       '.ab-mini-list .list-card-content{display:flex!important;flex-direction:column!important;align-items:stretch!important}' +
@@ -1811,15 +2095,16 @@
       '.ab-mini-list .list-card-title{display:block!important;width:100%!important;text-align:center!important;font-size:13px!important;line-height:1.4!important}' +
       '.ab-mini-list .list-card-actions{display:none!important}' +
       '.ab-silent-list-refresh .el-loading-mask{display:none!important}' +
-      '.ab-modal .el-button--primary{--el-button-bg-color:#7c3aed;--el-button-border-color:#7c3aed;--el-button-hover-bg-color:#6d28d9;--el-button-hover-border-color:#6d28d9;--el-button-active-bg-color:#5b21b6;--el-button-active-border-color:#5b21b6}' +
+      '.ab-modal .el-button--primary.is-text{--el-button-text-color:#7c3aed;--el-button-hover-text-color:#a78bfa;--el-button-active-text-color:#6d28d9;color:#7c3aed}' +
       '.ab-integration-toast{position:fixed;z-index:99999;top:22px;left:50%;transform:translate(-50%,-20px);opacity:0;padding:10px 16px;border-radius:6px;background:#67c23a;color:#fff;transition:.2s;pointer-events:none}' +
       '.ab-integration-toast.is-visible{opacity:1;transform:translate(-50%,0)}' +
       '.ab-integration-toast.is-error{background:#f56c6c}' +
       '.ab-modal-overlay{z-index:2100;display:flex;align-items:center;justify-content:center}' +
       '.ab-modal-overlay .el-overlay-dialog{position:static;width:min(620px,calc(100vw - 32px))}' +
+      '.ab-rule-modal .el-overlay-dialog{width:min(800px,calc(100vw - 32px))}' +
       '.ab-modal{width:100%;margin:0;max-height:86vh;overflow:auto;background:var(--el-bg-color);border-radius:var(--el-border-radius-small)}' +
-      '.ab-modal .el-dialog__header{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 10px;margin:0}' +
-      '.ab-modal .el-dialog__headerbtn{position:static;width:32px;height:32px;border:0;background:transparent;color:var(--el-color-info);cursor:pointer}' +
+      '.ab-modal .el-dialog__header{position:relative;display:flex;align-items:center;justify-content:center;padding:20px 48px 10px;margin:0;text-align:center}' +
+      '.ab-modal .el-dialog__headerbtn{position:absolute;top:14px;right:16px;width:32px;height:32px;border:0;background:transparent;color:var(--el-color-info);cursor:pointer}' +
       '.ab-modal .el-dialog__headerbtn .el-icon{font-size:16px}' +
       '.ab-modal .el-dialog__body{padding:20px}' +
       '.ab-rule-editor{padding:0 8px}' +
@@ -1827,7 +2112,7 @@
       '.ab-form-row .el-form-item__label{width:104px;flex:0 0 104px;padding-right:16px;justify-content:flex-end;line-height:32px;box-sizing:border-box}' +
       '.ab-form-row .el-form-item__content{flex:1;min-width:0}' +
       '.ab-form-row .el-input{width:100%}' +
-      '.ab-number-input{width:150px}' +
+      '.ab-number-input{width:150px;margin-left:auto}' +
       '.ab-number-input .el-input__inner{text-align:center}' +
       '.ab-number-input .el-input-number__decrease,.ab-number-input .el-input-number__increase{display:flex;align-items:center;justify-content:center}' +
       '.ab-form-row .el-textarea{width:100%}' +
@@ -1838,7 +2123,7 @@
       '.ab-inline-label{display:block;margin-bottom:6px;color:var(--el-text-color-regular);font-size:13px;line-height:20px}' +
       '.ab-rss-group-row .ab-inline-label{display:none}' +
       '.ab-rss-group-row .el-textarea__inner{min-height:32px;height:32px;resize:none;white-space:nowrap;overflow:hidden}' +
-      '.ab-form-row select{width:100%;height:32px;padding:0 11px;border:1px solid var(--el-border-color);border-radius:var(--el-border-radius-base);background:var(--el-fill-color-blank);color:var(--el-text-color-primary);box-sizing:border-box}' +
+      '.ab-form-row select{width:100%;height:32px;padding:0 11px;border:1px solid var(--el-border-color);border-radius:var(--el-border-radius-base);background:var(--el-fill-color-blank);color:var(--el-text-color-primary);font-family:inherit;font-size:var(--el-font-size-base,14px);font-weight:400;line-height:32px;box-sizing:border-box}' +
       '.ab-exclude-editor{display:flex;align-items:center;flex-wrap:wrap;gap:8px;width:100%;min-height:32px}' +
       '.ab-exclude-tag{max-width:220px}' +
       '.ab-exclude-tag .el-tag__content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +

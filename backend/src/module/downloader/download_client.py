@@ -22,11 +22,15 @@ class DownloadClient(TorrentPath):
         host = settings.downloader.host
         username = settings.downloader.username
         password = settings.downloader.password
+        api_key_enable = settings.downloader.api_key_enable
+        api_key = settings.downloader.api_key
         ssl = settings.downloader.ssl
         if type == "qbittorrent":
             from .client.qb_downloader import QbDownloader
 
-            return QbDownloader(host, username, password, ssl)
+            return QbDownloader(
+                host, username, password, ssl, api_key, api_key_enable
+            )
         else:
             logger.error(f"[Downloader] Unsupported downloader type: {type}")
             raise Exception(f"Unsupported downloader type: {type}")
@@ -104,6 +108,9 @@ class DownloadClient(TorrentPath):
             status_filter=status_filter, category=category, tag=tag
         )
 
+    def get_torrent_files(self, torrent_hash):
+        return self.client.torrents_files(torrent_hash)
+
     def rename_torrent_file(self, _hash, old_path, new_path) -> bool:
         logger.info(f"{old_path} >> {new_path}")
         return self.client.torrents_rename_file(
@@ -120,7 +127,9 @@ class DownloadClient(TorrentPath):
         with RequestContent() as req:
             if isinstance(torrent, list):
                 if len(torrent) == 0:
-                    logger.debug(f"[Downloader] No torrent found: {bangumi.official_title}")
+                    logger.debug(
+                        f"[Downloader] No torrent found: {bangumi.official_title}"
+                    )
                     return False
                 if "magnet" in torrent[0].url:
                     torrent_url = [t.url for t in torrent]

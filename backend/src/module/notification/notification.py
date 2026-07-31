@@ -3,6 +3,7 @@ import logging
 from module.conf import settings
 from module.database import Database
 from module.models import Notification
+from module.models.config import Notification as NotificationConfig
 
 from .plugin import (
     BarkNotification,
@@ -27,6 +28,22 @@ def getClient(type: str):
         return None
 
 
+def send_test_notification(
+    config: NotificationConfig, poster_path: str | None = None
+) -> bool:
+    notifier_class = getClient(config.type)
+    if notifier_class is None:
+        raise ValueError(f"Unsupported notification type: {config.type}")
+    notify = Notification(
+        official_title="AutoBangumi 测试通知",
+        season=1,
+        episode=1,
+        poster_path=poster_path,
+    )
+    with notifier_class(token=config.token, chat_id=config.chat_id) as notifier:
+        return notifier.post_msg(notify)
+
+
 class PostNotification:
     def __init__(self):
         Notifier = getClient(settings.notification.type)
@@ -37,7 +54,7 @@ class PostNotification:
     @staticmethod
     def _get_poster(notify: Notification):
         with Database() as db:
-            poster_path = db.bangumi.match_poster(notify.official_title)
+            poster_path = db.bangumi.match_poster_source(notify.official_title)
         notify.poster_path = poster_path
 
     def send_msg(self, notify: Notification) -> bool:

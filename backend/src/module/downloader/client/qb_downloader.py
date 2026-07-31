@@ -14,11 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 class QbDownloader:
-    def __init__(self, host: str, username: str, password: str, ssl: bool):
+    def __init__(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        ssl: bool,
+        api_key: str = "",
+        api_key_enable: bool | None = None,
+    ):
+        self._api_key_enabled = (
+            bool(api_key) if api_key_enable is None else api_key_enable
+        )
+        extra_headers = (
+            {"Authorization": f"Bearer {api_key}"} if self._api_key_enabled else None
+        )
         self._client: Client = Client(
             host=host,
-            username=username,
-            password=password,
+            username=None if self._api_key_enabled else username,
+            password=None if self._api_key_enabled else password,
+            EXTRA_HEADERS=extra_headers,
             VERIFY_WEBUI_CERTIFICATE=ssl,
             DISABLE_LOGGING_DEBUG_OUTPUT=True,
             REQUESTS_ARGS={"timeout": (3.1, 10)},
@@ -30,7 +45,10 @@ class QbDownloader:
         times = 0
         while times < retry:
             try:
-                self._client.auth_log_in()
+                if self._api_key_enabled:
+                    self._client.app_version()
+                else:
+                    self._client.auth_log_in()
                 return True
             except LoginFailed:
                 logger.error(
@@ -53,7 +71,8 @@ class QbDownloader:
         return False
 
     def logout(self):
-        self._client.auth_log_out()
+        if not self._api_key_enabled:
+            self._client.auth_log_out()
 
     def check_host(self):
         try:
@@ -82,17 +101,24 @@ class QbDownloader:
             status_filter=status_filter, category=category, tag=tag
         )
 
+    def torrents_files(self, torrent_hash):
+        return self._client.torrents_files(torrent_hash=torrent_hash)
+
     def add_torrents(self, torrent_urls, torrent_files, save_path, category):
-        resp = self._client.torrents_add(
-            is_paused=False,
-            urls=torrent_urls,
-            torrent_files=torrent_files,
-            save_path=save_path,
-            category=category,
-            use_auto_torrent_management=False,
-            content_layout="NoSubFolder"
-        )
-        return resp == "Ok."
+        try:
+            resp = self._client.torrents_add(
+                is_paused=False,
+                urls=torrent_urls,
+                torrent_files=torrent_files,
+                save_path=save_path,
+                category=category,
+                use_auto_torrent_management=False,
+                content_layout="NoSubFolder",
+            )
+            return resp == "Ok."
+        except Conflict409Error:
+            logger.debug("[Downloader] Torrent already exists in qBittorrent")
+            return True
 
     def torrents_delete(self, hash):
         return self._client.torrents_delete(delete_files=True, torrent_hashes=hash)

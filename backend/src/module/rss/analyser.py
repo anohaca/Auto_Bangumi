@@ -25,16 +25,19 @@ class RSSAnalyser(TitleParser):
         elif rss.parser == "tmdb":
             parsed_episode = parse_episode(torrent.name)
             old_title = bangumi.official_title
-            tmdb_title, season, year, poster_link = self.tmdb_parser(
-                bangumi.official_title,
-                bangumi.season,
-                settings.rss_parser.language,
-                parsed_episode.episode,
+            tmdb_title, season, year, poster_link, poster_source_link = (
+                self.tmdb_parser(
+                    bangumi.official_title,
+                    bangumi.season,
+                    settings.rss_parser.language,
+                    parsed_episode.episode,
+                )
             )
             bangumi.official_title = tmdb_title
             bangumi.year = year
             bangumi.season = season
             bangumi.poster_link = poster_link
+            bangumi.poster_source_link = poster_source_link
             logger.info(
                 "[Parser] %s E%s -> %s",
                 old_title,

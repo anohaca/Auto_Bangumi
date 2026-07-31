@@ -30,6 +30,8 @@ export interface Downloader {
   host: string;
   username: string;
   password: string;
+  api_key_enable: boolean;
+  api_key: string;
   path: string;
   ssl: boolean;
 }
@@ -99,6 +101,8 @@ export const initConfig: Config = {
     host: '',
     username: '',
     password: '',
+    api_key_enable: false,
+    api_key: '',
     path: '',
     ssl: false,
   },

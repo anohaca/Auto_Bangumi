@@ -71,6 +71,21 @@ class BangumiDatabase:
         self.session.refresh(bangumi)
         logger.debug(f"[Database] Update {title_raw} poster_link to {poster_link}.")
 
+    def update_poster_links(
+        self, title_raw: str, poster_link: str | None, poster_source_link: str | None
+    ):
+        statement = select(Bangumi).where(Bangumi.title_raw == title_raw)
+        bangumi = self.session.exec(statement).first()
+        if not bangumi:
+            return False
+        bangumi.poster_link = poster_link
+        bangumi.poster_source_link = poster_source_link
+        self.session.add(bangumi)
+        self.session.commit()
+        self.session.refresh(bangumi)
+        logger.debug("[Database] Updated poster links for %s.", title_raw)
+        return True
+
     def delete_one(self, _id: int):
         statement = select(Bangumi).where(Bangumi.id == _id)
         bangumi = self.session.exec(statement).first()
@@ -107,6 +122,15 @@ class BangumiDatabase:
             return data.poster_link
         else:
             return ""
+
+    def match_poster_source(self, bangumi_name: str) -> str:
+        statement = select(Bangumi).where(
+            func.instr(bangumi_name, Bangumi.official_title) > 0
+        )
+        data = self.session.exec(statement).first()
+        if not data:
+            return ""
+        return data.poster_source_link or data.poster_link or ""
 
     def match_list(self, torrent_list: list, rss_link: str) -> list:
         match_datas = self.search_all()

@@ -8,7 +8,7 @@ const { getSettingGroup } = useConfigStore();
 const downloader = getSettingGroup('downloader');
 const downloaderType: DownloaderType = ['qbittorrent'];
 
-const items: SettingItem<Downloader>[] = [
+const items = computed<SettingItem<Downloader>[]>(() => [
   {
     configKey: 'type',
     label: () => t('config.downloader_set.type'),
@@ -28,24 +28,44 @@ const items: SettingItem<Downloader>[] = [
     },
   },
   {
-    configKey: 'username',
-    label: () => t('config.downloader_set.username'),
-    type: 'input',
-    prop: {
-      type: 'text',
-      placeholder: 'admin',
-    },
+    configKey: 'api_key_enable',
+    label: () => t('config.downloader_set.api_key_enable'),
+    type: 'switch',
   },
-  {
-    configKey: 'password',
-    label: () => t('config.downloader_set.password'),
-    type: 'input',
-    prop: {
-      type: 'text',
-      placeholder: 'admindmin',
-    },
-    bottomLine: true,
-  },
+  ...(downloader.value.api_key_enable
+    ? [
+        {
+          configKey: 'api_key' as const,
+          label: () => t('config.downloader_set.api_key'),
+          type: 'input' as const,
+          prop: {
+            type: 'password',
+            placeholder: 'qbt_...',
+          },
+          bottomLine: true,
+        },
+      ]
+    : [
+        {
+          configKey: 'username' as const,
+          label: () => t('config.downloader_set.username'),
+          type: 'input' as const,
+          prop: {
+            type: 'text',
+            placeholder: 'admin',
+          },
+        },
+        {
+          configKey: 'password' as const,
+          label: () => t('config.downloader_set.password'),
+          type: 'input' as const,
+          prop: {
+            type: 'password',
+            placeholder: 'password',
+          },
+          bottomLine: true,
+        },
+      ]),
   {
     configKey: 'path',
     label: () => t('config.downloader_set.path'),
@@ -60,7 +80,7 @@ const items: SettingItem<Downloader>[] = [
     label: () => t('config.downloader_set.ssl'),
     type: 'switch',
   },
-];
+]);
 </script>
 
 <template>

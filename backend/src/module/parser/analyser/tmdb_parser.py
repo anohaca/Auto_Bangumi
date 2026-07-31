@@ -19,6 +19,7 @@ class TMDBInfo:
     last_season: int
     year: str
     poster_link: str = None
+    poster_source_link: str = None
     score: float = 0
 
 
@@ -117,7 +118,9 @@ def select_tmdb_candidate(
         except (KeyError, TypeError, ValueError):
             air_date = None
         if air_date is not None:
-            dated_candidates.append((abs((observed - air_date).days), content, air_date))
+            dated_candidates.append(
+                (abs((observed - air_date).days), content, air_date)
+            )
 
     if dated_candidates:
         dated_candidates.sort(
@@ -196,13 +199,15 @@ def tmdb_parser(
             official_title = info_content.get("name")
             year_number = info_content.get("first_air_date").split("-")[0]
             if poster_path:
+                poster_source_link = "https://image.tmdb.org/t/p/w780" + poster_path
                 if not test:
-                    img = req.get_content(f"https://image.tmdb.org/t/p/w780{poster_path}")
+                    img = req.get_content(poster_source_link)
                     poster_link = save_image(img, "jpg")
                 else:
-                    poster_link = "https://image.tmdb.org/t/p/w780" + poster_path
+                    poster_link = poster_source_link
             else:
                 poster_link = None
+                poster_source_link = None
             return TMDBInfo(
                 id,
                 official_title,
@@ -211,6 +216,7 @@ def tmdb_parser(
                 last_season,
                 str(year_number),
                 poster_link,
+                poster_source_link,
                 float(info_content.get("vote_average") or 0),
             )
         else:

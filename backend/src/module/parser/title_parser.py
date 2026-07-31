@@ -1,4 +1,5 @@
 import logging
+import re
 
 from module.conf import settings
 from module.models import Bangumi
@@ -17,6 +18,43 @@ logger = logging.getLogger(__name__)
 class TitleParser:
     def __init__(self):
         pass
+
+    @staticmethod
+    def torrent_title_parser(raw: str) -> str:
+        text = re.sub(r"^\s*\[[^\]]+\]\s*", "", str(raw or "")).strip()
+        matches = list(
+            re.finditer(
+                r"\s+-\s+(\d+(?:\.\d+)?)(?:v\d+)?"
+                r"(?=\s*(?:\[|\.(?:torrent|mkv|mp4)|$))",
+                text,
+                re.IGNORECASE,
+            )
+        )
+        if matches:
+            text = text[: matches[-1].start()].strip()
+        candidates = [
+            candidate.strip()
+            for candidate in re.split(r"\s+-\s+", text)
+            if candidate.strip()
+        ]
+        cjk_candidates = [
+            candidate
+            for candidate in candidates
+            if re.search(r"[\u3400-\u9fff\u3040-\u30ff]", candidate)
+        ]
+        return (cjk_candidates[-1] if cjk_candidates else text).strip()
+
+    @staticmethod
+    def torrent_episode_parser(raw: str) -> float | None:
+        matches = list(
+            re.finditer(
+                r"\s+-\s+(\d+(?:\.\d+)?)(?:v\d+)?"
+                r"(?=\s*(?:\[|\.(?:torrent|mkv|mp4)|$))",
+                str(raw or ""),
+                re.IGNORECASE,
+            )
+        )
+        return float(matches[-1].group(1)) if matches else None
 
     @staticmethod
     def torrent_parser(
@@ -46,11 +84,17 @@ class TitleParser:
         if tmdb_info:
             logger.debug(f"TMDB Matched, official title is {tmdb_info.title}")
             tmdb_season = tmdb_info.last_season if tmdb_info.last_season else season
-            return tmdb_info.title, tmdb_season, tmdb_info.year, tmdb_info.poster_link
+            return (
+                tmdb_info.title,
+                tmdb_season,
+                tmdb_info.year,
+                tmdb_info.poster_link,
+                tmdb_info.poster_source_link,
+            )
         else:
             logger.warning(f"Cannot match {title} in TMDB. Use raw title instead.")
             logger.warning("Please change bangumi info manually.")
-            return title, season, None, None
+            return title, season, None, None, None
 
     @staticmethod
     def tmdb_poster_parser(bangumi: Bangumi):
@@ -58,6 +102,7 @@ class TitleParser:
         if tmdb_info:
             logger.debug(f"TMDB Matched, official title is {tmdb_info.title}")
             bangumi.poster_link = tmdb_info.poster_link
+            bangumi.poster_source_link = tmdb_info.poster_source_link
         else:
             logger.warning(
                 f"Cannot match {bangumi.official_title} in TMDB. Use raw title instead."
