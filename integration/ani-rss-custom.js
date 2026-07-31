@@ -74,7 +74,7 @@
         ['downloader.host', t.host, 'text'],
         ['downloader.username', t.username, 'text'],
         ['downloader.password', t.password, 'password'],
-        ['downloader.api_key_enable', t.apiKeyEnable, 'checkbox'],
+        ['downloader.api_key_enable', t.apiKeyEnable, 'switch'],
         ['downloader.api_key', t.apiKey, 'password'],
         ['downloader.path', t.path, 'text'],
         ['downloader.ssl', t.ssl, 'checkbox'],
@@ -164,9 +164,22 @@
   };
 
   const inputHtml = ([path, label, type, choices]) => {
+    if (type === 'switch') {
+      return (
+        '<label class="ab-switch-row" data-ab-row="' +
+        path +
+        '"><span>' +
+        label +
+        '</span><span class="el-switch"><input class="el-switch__input" data-ab-path="' +
+        path +
+        '" type="checkbox"><span class="el-switch__core"><span class="el-switch__action"></span></span></span></label>'
+      );
+    }
     if (type === 'checkbox') {
       return (
-        '<label class="ab-check"><input data-ab-path="' +
+        '<label class="ab-check" data-ab-row="' +
+        path +
+        '"><input data-ab-path="' +
         path +
         '" type="checkbox"><span>' +
         label +
@@ -175,7 +188,9 @@
     }
     if (type === 'select') {
       return (
-        '<label><span>' +
+        '<label data-ab-row="' +
+        path +
+        '"><span>' +
         label +
         '</span><select data-ab-path="' +
         path +
@@ -188,15 +203,34 @@
     }
     if (type === 'list') {
       return (
-        '<label class="ab-settings-list-field"><span>' +
+        '<label class="ab-settings-list-field" data-ab-row="' +
+        path +
+        '"><span>' +
         label +
         '</span><div class="ab-settings-exclude" data-ab-path="' +
         path +
         '"></div></label>'
       );
     }
+    if (type === 'password') {
+      return (
+        '<label data-ab-row="' +
+        path +
+        '"><span>' +
+        label +
+        '</span><span class="ab-secret-input"><input data-ab-path="' +
+        path +
+        '" type="password"><button type="button" class="ab-secret-toggle" aria-label="\u663e\u793a' +
+        label +
+        '" title="\u663e\u793a' +
+        label +
+        '"><svg viewBox="0 0 1024 1024" aria-hidden="true"><path fill="currentColor" d="M512 192c-224 0-394 144-480 320 86 176 256 320 480 320s394-144 480-320c-86-176-256-320-480-320zm0 544c-124 0-224-100-224-224s100-224 224-224 224 100 224 224-100 224-224 224zm0-352a128 128 0 1 0 0 256 128 128 0 0 0 0-256z"/></svg></button></span></label>'
+      );
+    }
     return (
-      '<label><span>' +
+      '<label data-ab-row="' +
+      path +
+      '"><span>' +
       label +
       '</span><input data-ab-path="' +
       path +
@@ -204,6 +238,20 @@
       type +
       '"></label>'
     );
+  };
+
+  const updateDownloaderAuthFields = () => {
+    const enabled = Boolean(field('downloader.api_key_enable')?.checked);
+    [
+      ['downloader.username', !enabled],
+      ['downloader.password', !enabled],
+      ['downloader.api_key', enabled],
+    ].forEach(([path, visible]) => {
+      const row = panel()?.querySelector('[data-ab-row="' + path + '"]');
+      if (row) row.style.display = visible ? 'flex' : 'none';
+    });
+    const switchElement = field('downloader.api_key_enable')?.closest('.el-switch');
+    switchElement?.classList.toggle('is-checked', enabled);
   };
 
   const openSettingsExcludeAdder = (onAdd) => {
@@ -298,7 +346,9 @@
     groups.flatMap((group) => group.fields).forEach(([path, , type]) => {
       const input = field(path);
       const value = getValue(config, path);
-      if (type === 'checkbox') input.checked = Boolean(value);
+      if (type === 'checkbox' || type === 'switch') {
+        input.checked = Boolean(value);
+      }
       else if (type === 'list') {
         renderSettingsExclude(
           input,
@@ -307,6 +357,7 @@
       }
       else input.value = value ?? '';
     });
+    updateDownloaderAuthFields();
     panel().querySelector('.ab-login').style.display = 'none';
     panel().querySelector('.ab-settings').style.display = 'grid';
     panel().querySelector('.ab-actions').style.display = 'flex';
@@ -352,7 +403,7 @@
     groups.flatMap((group) => group.fields).forEach(([path, , type]) => {
       const input = field(path);
       let value = input.value;
-      if (type === 'checkbox') value = input.checked;
+      if (type === 'checkbox' || type === 'switch') value = input.checked;
       if (type === 'number') value = Number(value);
       if (type === 'list') {
         value = [...(input._abItems || [])];
@@ -476,7 +527,40 @@
       ' select{width:190px;height:32px;padding:0 9px;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-fill-color-blank);color:var(--el-text-color-primary);font-size:14px;box-sizing:border-box}' +
       '#' +
       PANEL_ID +
+      ' .ab-secret-input{position:relative;display:block;width:190px}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-secret-input input{width:100%;padding-right:34px}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-secret-toggle{position:absolute;right:1px;top:1px;display:flex;width:31px;height:30px;align-items:center;justify-content:center;padding:0;border:0;background:transparent;color:var(--el-text-color-placeholder);cursor:pointer}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-secret-toggle:hover{color:var(--el-text-color-regular)}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-secret-toggle svg{width:16px;height:16px}' +
+      '#' +
+      PANEL_ID +
       ' .ab-check{justify-content:flex-start}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch{display:inline-flex;align-items:center;height:32px}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch__input{position:absolute;width:0;height:0;opacity:0}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch__core{position:relative;display:inline-flex;width:40px;height:20px;align-items:center;border:1px solid var(--el-border-color);border-radius:10px;background:var(--el-border-color);box-sizing:border-box;cursor:pointer;transition:.2s}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch__action{position:absolute;left:1px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch.is-checked .el-switch__core{border-color:var(--ab-brand);background:var(--ab-brand)}' +
+      '#' +
+      PANEL_ID +
+      ' .ab-switch-row .el-switch.is-checked .el-switch__action{left:21px}' +
       '#' +
       PANEL_ID +
       ' .ab-settings-list-field{align-items:flex-start}' +
@@ -524,6 +608,21 @@
       .querySelector('.ab-test-notification')
       .addEventListener('click', testNotification);
     element.querySelector('.ab-login-button').addEventListener('click', login);
+    field('downloader.api_key_enable')?.addEventListener(
+      'change',
+      updateDownloaderAuthFields
+    );
+    element.querySelectorAll('.ab-secret-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const input = button.previousElementSibling;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        const action = visible ? '\u663e\u793a' : '\u9690\u85cf';
+        const label = button.closest('label')?.querySelector(':scope > span')?.textContent || '';
+        button.setAttribute('aria-label', action + label);
+        button.title = action + label;
+      });
+    });
     return element;
   };
 
